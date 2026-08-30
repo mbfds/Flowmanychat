@@ -1,0 +1,366 @@
+import React, { useState } from 'react';
+import { 
+  Settings, 
+  Instagram, 
+  Facebook, 
+  Bot, 
+  Key, 
+  ShieldCheck, 
+  Sparkles, 
+  Save, 
+  Check, 
+  Link, 
+  RefreshCw,
+  Clock,
+  HelpCircle,
+  Variable,
+  Layers,
+  Webhook,
+  Database,
+  Cpu,
+  Activity,
+  Gauge
+} from 'lucide-react';
+import { BotKnowledgeBase, CustomFieldDefinition, WebhookSettingsState } from '../../types';
+import { CustomFieldsManager } from './CustomFieldsManager';
+import { WebhooksManager } from './WebhooksManager';
+import { DatabaseManager } from './DatabaseManager';
+import { FacebookRateLimitMonitor } from './FacebookRateLimitMonitor';
+import { DomainManager } from './DomainManager';
+import { ProductionDeployHub } from './ProductionDeployHub';
+import { Globe, Rocket } from 'lucide-react';
+
+interface SettingsHubProps {
+  knowledgeBase: BotKnowledgeBase;
+  onUpdateKnowledgeBase: (kb: BotKnowledgeBase) => void;
+  customFields: CustomFieldDefinition[];
+  onUpdateCustomFields: (fields: CustomFieldDefinition[]) => void;
+  webhookSettings?: WebhookSettingsState;
+  onUpdateWebhookSettings?: (settings: WebhookSettingsState) => void;
+}
+
+export const SettingsHub: React.FC<SettingsHubProps> = ({
+  knowledgeBase,
+  onUpdateKnowledgeBase,
+  customFields,
+  onUpdateCustomFields,
+  webhookSettings,
+  onUpdateWebhookSettings
+}) => {
+  const [activeTab, setActiveTab] = useState<'production' | 'domains' | 'rate_limits' | 'custom_fields' | 'database' | 'webhooks' | 'meta_ai'>('production');
+  const [formData, setFormData] = useState<BotKnowledgeBase>(knowledgeBase);
+  const [isSaved, setIsSaved] = useState(false);
+
+  const handleSave = () => {
+    onUpdateKnowledgeBase(formData);
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 2000);
+  };
+
+  return (
+    <div id="settings_hub_view" className="flex-1 flex flex-col h-full bg-[#F8F9FB] p-6 lg:p-8 overflow-y-auto space-y-6 select-none">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-[#1A1D21] flex items-center gap-2">
+            <Settings className="w-5 h-5 text-[#64748B]" />
+            <span>Configurações, Multi-Domínio & Produção</span>
+          </h2>
+          <p className="text-xs text-[#64748B]">
+            Gerencie múltiplos domínios em servidor único, banco MongoDB, deploy para aaPanel e cotas Meta API.
+          </p>
+        </div>
+
+        {activeTab === 'meta_ai' && (
+          <button
+            onClick={handleSave}
+            className="py-2 px-5 rounded-lg bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-bold shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+          >
+            {isSaved ? <Check className="w-4 h-4 text-emerald-200" /> : <Save className="w-4 h-4" />}
+            <span>{isSaved ? 'Configurações Salvas!' : 'Salvar Alterações'}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-1 overflow-x-auto">
+        <button
+          id="tab_settings_production"
+          onClick={() => setActiveTab('production')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'production'
+              ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50 rounded-t-lg'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Rocket className="w-4 h-4 text-emerald-600" />
+          <span>Deploy & Produção (aaPanel)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-900">
+            98% Pronto
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_domains"
+          onClick={() => setActiveTab('domains')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'domains'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Globe className="w-4 h-4 text-blue-600" />
+          <span>Domínios & Multi-Tenant</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800">
+            1 Banco Único
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_rate_limits"
+          onClick={() => setActiveTab('rate_limits')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'rate_limits'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-indigo-600" />
+          <span>Monitor de Rate Limits (Meta API)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            14% Seguro
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_custom_fields"
+          onClick={() => setActiveTab('custom_fields')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'custom_fields'
+              ? 'border-[#0084FF] text-[#0084FF]'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Variable className="w-4 h-4" />
+          <span>Campos Personalizados</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+            {customFields.length}
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_database"
+          onClick={() => setActiveTab('database')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'database'
+              ? 'border-[#0084FF] text-[#0084FF]'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Database className="w-4 h-4 text-indigo-600" />
+          <span>MongoDB & Pooler</span>
+        </button>
+
+        <button
+          id="tab_settings_webhooks"
+          onClick={() => setActiveTab('webhooks')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'webhooks'
+              ? 'border-[#0084FF] text-[#0084FF]'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Webhook className="w-4 h-4 text-blue-600" />
+          <span>Webhooks Meta (Graph API)</span>
+        </button>
+
+        <button
+          id="tab_settings_meta_ai"
+          onClick={() => setActiveTab('meta_ai')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'meta_ai'
+              ? 'border-[#0084FF] text-[#0084FF]'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>Conexões Meta & IA</span>
+        </button>
+      </div>
+
+      {/* Tab: PRODUCTION DEPLOY & AUDIT */}
+      {activeTab === 'production' && (
+        <ProductionDeployHub />
+      )}
+
+      {/* Tab: MULTI-DOMAIN & WHITE-LABEL */}
+      {activeTab === 'domains' && (
+        <DomainManager />
+      )}
+
+      {/* Tab: RATE LIMITS MONITOR */}
+      {activeTab === 'rate_limits' && (
+        <FacebookRateLimitMonitor />
+      )}
+
+      {/* Tab: CUSTOM FIELDS MANAGER */}
+      {activeTab === 'custom_fields' && (
+        <CustomFieldsManager
+          customFields={customFields}
+          onUpdateCustomFields={onUpdateCustomFields}
+        />
+      )}
+
+      {/* Tab: DATABASE & CONNECTION POOLER MANAGER */}
+      {activeTab === 'database' && (
+        <DatabaseManager />
+      )}
+
+      {/* Tab: WEBHOOKS MANAGER WITH MONGODB PERSISTENCE */}
+      {activeTab === 'webhooks' && (
+        <WebhooksManager
+          initialSettings={webhookSettings}
+          onSaveSettings={onUpdateWebhookSettings}
+        />
+      )}
+
+      {/* Tab 3: META CONNECTIONS & AI KNOWLEDGE */}
+      {activeTab === 'meta_ai' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Meta Connections */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 space-y-4 shadow-sm">
+              <h3 className="text-sm font-bold text-[#1A1D21] flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Contas Meta Conectadas</span>
+              </h3>
+
+              {/* Instagram Account */}
+              <div className="p-4 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-pink-50 text-pink-600 border border-pink-200">
+                      <Instagram className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-[#1A1D21]">@manyflow.oficial</h4>
+                      <span className="text-[10px] text-[#64748B]">Instagram Profissional / Creator</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    Conectado
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#64748B]">
+                  Permissões ativas: <code className="font-mono text-gray-600">instagram_manage_messages</code>, <code className="font-mono text-gray-600">instagram_manage_comments</code>.
+                </p>
+              </div>
+
+              {/* Facebook Page */}
+              <div className="p-4 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">
+                      <Facebook className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-[#1A1D21]">ManyFlow Soluções Digitais</h4>
+                      <span className="text-[10px] text-[#64748B]">Página do Facebook ID: 1084920492</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    Conectado
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#64748B]">
+                  Permissões ativas: <code className="font-mono text-gray-600">pages_messaging</code>, <code className="font-mono text-gray-600">pages_manage_metadata</code>.
+                </p>
+              </div>
+
+              {/* Webhook Configuration Info */}
+              <div className="pt-2 border-t border-[#E2E8F0] space-y-2 text-xs">
+                <span className="font-semibold text-[#1A1D21] block">Webhook Callback URL</span>
+                <div className="p-2.5 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] font-mono text-[11px] text-[#0084FF] select-all truncate">
+                  https://api.manyflow.app/webhooks/meta-messenger
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: AI Knowledge Base */}
+          <div className="lg:col-span-7 bg-white border border-[#E2E8F0] rounded-xl p-6 space-y-5 shadow-sm">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-600" />
+                <h3 className="text-sm font-bold text-[#1A1D21]">
+                  Base de Conhecimento do Robô IA (Gemini 2.5)
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200">
+                Auto-Aprendizado
+              </span>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">
+                  Resumo da Sua Empresa & Serviços
+                </label>
+                <textarea
+                  rows={3}
+                  value={formData.businessSummary}
+                  onChange={(e) => setFormData({ ...formData, businessSummary: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] text-xs text-[#1A1D21] focus:outline-none focus:ring-1 focus:ring-[#0084FF] focus:border-[#0084FF]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">
+                  Produtos, Planos e Preços
+                </label>
+                <textarea
+                  rows={3}
+                  value={formData.productsAndPricing}
+                  onChange={(e) => setFormData({ ...formData, productsAndPricing: e.target.value })}
+                  className="w-full p-3 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] text-xs text-[#1A1D21] focus:outline-none focus:ring-1 focus:ring-[#0084FF] focus:border-[#0084FF]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">
+                    Tom de Voz do Robô
+                  </label>
+                  <select
+                    value={formData.toneOfVoice}
+                    onChange={(e) => setFormData({ ...formData, toneOfVoice: e.target.value as any })}
+                    className="w-full px-3 py-2 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] text-xs text-[#1A1D21]"
+                  >
+                    <option value="friendly">Simpático & Consultivo</option>
+                    <option value="professional">Formal & Corporativo</option>
+                    <option value="energetic">Jovem & Descontraído</option>
+                    <option value="minimalist">Focado em Vendas Diretas</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-[#64748B] uppercase tracking-wider mb-1">
+                    Horário de Suporte Humano
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.workingHours}
+                    onChange={(e) => setFormData({ ...formData, workingHours: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] text-xs text-[#1A1D21]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+

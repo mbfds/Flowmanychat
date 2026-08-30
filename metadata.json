@@ -1,0 +1,6 @@
+{
+  "name": "ManyFlow - Automação Instagram & Messenger",
+  "description": "Plataforma completa de automação de mensagens, funis de direct, comentários e atendimento com IA para Instagram e Facebook Messenger estilo ManyChat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
