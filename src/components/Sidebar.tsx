@@ -18,7 +18,10 @@ import {
   Building2, 
   ChevronDown, 
   Globe,
-  User as UserIcon
+  User as UserIcon,
+  MessageCircle,
+  Send,
+  DollarSign
 } from 'lucide-react';
 import { NavigationTab, ChannelType } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -31,6 +34,7 @@ interface SidebarProps {
   onSelectChannel?: (channel: ChannelType) => void;
   onOpenSimulator?: () => void;
   onOpenLoginModal?: () => void;
+  onOpenProfileModal?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -40,7 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   selectedChannel = 'omnichannel',
   onSelectChannel,
   onOpenSimulator,
-  onOpenLoginModal
+  onOpenLoginModal,
+  onOpenProfileModal
 }) => {
   const { user, tenant, tenants, switchTenant, logout } = useAuth();
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
@@ -52,7 +57,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'flows' as NavigationTab, label: 'Fluxos de Automação', icon: GitFork, badge: '5 ativos' },
     { id: 'triggers' as NavigationTab, label: 'Gatilhos & Palavras-Chave', icon: Zap, badge: '4' },
     { id: 'comment_tools' as NavigationTab, label: 'Comentário ➔ Direct', icon: MessageSquareReply, badge: 'Reels & Posts' },
-    { id: 'broadcast' as NavigationTab, label: 'Transmissão (Broadcast)', icon: Radio, badge: 'Novo', highlight: true },
+    { id: 'whatsapp_groups' as NavigationTab, label: 'Grupos WhatsApp VIP', icon: Users, badge: 'R$ 243k', highlight: true },
+    { id: 'broadcast' as NavigationTab, label: 'Transmissão (Broadcast)', icon: Radio, badge: 'Novo' },
     { id: 'inbox' as NavigationTab, label: 'Atendimento ao Vivo', icon: Inbox, badge: unreadConversationsCount > 0 ? `${unreadConversationsCount}` : undefined, highlight: unreadConversationsCount > 0 },
     { id: 'contacts' as NavigationTab, label: 'Audiência & CRM', icon: Users, badge: '4.2k' },
     { id: 'analytics' as NavigationTab, label: 'Métricas & Conversão', icon: BarChart3 },
@@ -60,13 +66,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   return (
-    <aside id="main_sidebar" className="w-64 bg-white border-r border-[#E2E8F0] flex flex-col justify-between h-screen shrink-0 select-none z-30 shadow-[1px_0_4px_rgba(0,0,0,0.02)]">
+    <aside id="main_sidebar" className="w-64 bg-white dark:bg-slate-900 border-r border-[#E2E8F0] dark:border-slate-800 flex flex-col justify-between h-screen shrink-0 select-none z-30 shadow-[1px_0_4px_rgba(0,0,0,0.02)] transition-colors">
       {/* Brand Header & Workspace Selector */}
       <div className="overflow-y-auto">
-        <div className="p-4 border-b border-[#E2E8F0] relative">
+        <div className="p-4 border-b border-[#E2E8F0] dark:border-slate-800 relative">
           <div 
             onClick={() => setShowWorkspaceMenu(!showWorkspaceMenu)}
-            className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all cursor-pointer"
+            className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all cursor-pointer"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <div 
@@ -77,11 +83,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="font-bold text-sm tracking-tight text-[#1A1D21] truncate">
+                  <span className="font-bold text-sm tracking-tight text-[#1A1D21] dark:text-white truncate">
                     {brandName}
                   </span>
                 </div>
-                <p className="text-[10px] text-[#64748B] font-mono truncate">
+                <p className="text-[10px] text-[#64748B] dark:text-slate-400 font-mono truncate">
                   {tenant?.name || 'Workspace Principal'}
                 </p>
               </div>
@@ -92,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Workspaces Dropdown */}
           {showWorkspaceMenu && (
-            <div className="absolute top-16 left-3 right-3 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
+            <div className="absolute top-16 left-3 right-3 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-2 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-100">
               <div className="text-[10px] font-bold uppercase text-slate-400 px-2 py-1">
                 Alternar Workspace
               </div>
@@ -105,8 +111,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }}
                   className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
                     tenant?.id === t.id
-                      ? 'bg-blue-50 text-blue-700 font-bold'
-                      : 'text-slate-700 hover:bg-slate-50'
+                      ? 'bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60'
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
@@ -119,13 +125,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </button>
               ))}
 
-              <div className="pt-2 border-t border-slate-100">
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-700">
                 <button
                   onClick={() => {
                     setShowWorkspaceMenu(false);
                     onChangeTab('settings');
                   }}
-                  className="w-full text-left px-2 py-1 text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1.5"
+                  className="w-full text-left px-2 py-1 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1.5"
                 >
                   <Globe className="w-3.5 h-3.5" />
                   <span>Gerenciar Domínios / White-Label</span>
@@ -137,45 +143,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Channel Quick Toggles */}
         {onSelectChannel && (
-          <div className="p-3 border-b border-[#E2E8F0] bg-[#F8F9FB]">
-            <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-2 px-1">
+          <div className="p-3 border-b border-[#E2E8F0] dark:border-slate-800 bg-[#F8F9FB] dark:bg-slate-800/40">
+            <div className="text-[10px] font-bold text-[#64748B] dark:text-slate-400 uppercase tracking-wider mb-2 px-1">
               Canal de Foco
             </div>
-            <div className="grid grid-cols-3 gap-1 bg-white p-1 rounded-lg border border-[#E2E8F0]">
+            <div className="grid grid-cols-4 gap-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-[#E2E8F0] dark:border-slate-800 text-[11px]">
               <button
                 id="filter_omnichannel"
                 onClick={() => onSelectChannel('omnichannel')}
-                className={`py-1 text-xs font-semibold rounded transition-all text-center cursor-pointer ${
+                className={`py-1 rounded font-bold transition-all text-center cursor-pointer ${
                   selectedChannel === 'omnichannel'
                     ? 'bg-[#0084FF] text-white shadow-xs'
-                    : 'text-[#64748B] hover:text-[#1A1D21] hover:bg-gray-50'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-[#1A1D21] dark:hover:text-white'
                 }`}
               >
                 Todos
               </button>
               <button
+                id="filter_whatsapp"
+                onClick={() => onSelectChannel('whatsapp')}
+                className={`py-1 rounded font-bold transition-all flex items-center justify-center gap-0.5 cursor-pointer ${
+                  selectedChannel === 'whatsapp'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
+                }`}
+                title="WhatsApp (Meta Cloud API + Baileys)"
+              >
+                <MessageCircle className="w-3 h-3" />
+                <span>Whats</span>
+              </button>
+              <button
                 id="filter_instagram"
                 onClick={() => onSelectChannel('instagram')}
-                className={`py-1 text-xs font-semibold rounded transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                className={`py-1 rounded font-bold transition-all flex items-center justify-center gap-0.5 cursor-pointer ${
                   selectedChannel === 'instagram'
                     ? 'bg-pink-600 text-white shadow-xs'
-                    : 'text-[#64748B] hover:text-pink-600 hover:bg-pink-50'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-950/40'
                 }`}
               >
                 <Instagram className="w-3 h-3" />
                 <span>Insta</span>
               </button>
               <button
-                id="filter_messenger"
-                onClick={() => onSelectChannel('messenger')}
-                className={`py-1 text-xs font-semibold rounded transition-all flex items-center justify-center gap-1 cursor-pointer ${
-                  selectedChannel === 'messenger'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-[#64748B] hover:text-blue-600 hover:bg-blue-50'
+                id="filter_telegram"
+                onClick={() => onSelectChannel('telegram')}
+                className={`py-1 rounded font-bold transition-all flex items-center justify-center gap-0.5 cursor-pointer ${
+                  selectedChannel === 'telegram'
+                    ? 'bg-sky-600 text-white shadow-xs'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40'
                 }`}
+                title="Telegram Bot API"
               >
-                <Facebook className="w-3 h-3" />
-                <span>FB</span>
+                <Send className="w-3 h-3" />
+                <span>Tele</span>
               </button>
             </div>
           </div>
@@ -183,7 +203,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Navigation List */}
         <nav className="p-3 space-y-1">
-          <div className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-2 px-2">
+          <div className="text-[10px] font-bold text-[#64748B] dark:text-slate-400 uppercase tracking-wider mb-2 px-2">
             Menu Principal
           </div>
           {navItems.map((item) => {
@@ -196,14 +216,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => onChangeTab(item.id)}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-all group cursor-pointer ${
                   isActive
-                    ? 'bg-[#F0F7FF] text-[#0084FF] font-semibold border border-blue-100/80 shadow-xs'
-                    : 'text-[#64748B] hover:text-[#1A1D21] hover:bg-gray-50'
+                    ? 'bg-[#F0F7FF] dark:bg-blue-950/50 text-[#0084FF] dark:text-blue-400 font-semibold border border-blue-100/80 dark:border-blue-900/50 shadow-xs'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-[#1A1D21] dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800/60'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <Icon
                     className={`w-4 h-4 transition-transform group-hover:scale-105 ${
-                      isActive ? 'text-[#0084FF]' : 'text-[#64748B]'
+                      isActive ? 'text-[#0084FF] dark:text-blue-400' : 'text-[#64748B] dark:text-slate-400'
                     }`}
                   />
                   <span>{item.label}</span>
@@ -212,10 +232,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span
                     className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
                       item.highlight
-                        ? 'bg-rose-500 text-white font-bold animate-pulse'
+                        ? 'bg-emerald-500 text-white font-bold animate-pulse'
                         : isActive
-                        ? 'bg-blue-100 text-[#0084FF]'
-                        : 'bg-gray-100 text-[#64748B]'
+                        ? 'bg-blue-100 dark:bg-blue-900/60 text-[#0084FF] dark:text-blue-300'
+                        : 'bg-gray-100 dark:bg-slate-800 text-[#64748B] dark:text-slate-400'
                     }`}
                   >
                     {item.badge}
@@ -228,24 +248,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Footer User Session & Logout */}
-      <div className="p-3 border-t border-[#E2E8F0] space-y-2 bg-[#F8F9FB]">
+      <div className="p-3 border-t border-[#E2E8F0] dark:border-slate-800 space-y-2 bg-[#F8F9FB] dark:bg-slate-800/40">
         {/* User Card */}
         {user ? (
-          <div className="p-2.5 rounded-xl bg-white border border-[#E2E8F0] shadow-2xs flex items-center justify-between">
+          <div 
+            onClick={onOpenProfileModal}
+            className="p-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-[#E2E8F0] dark:border-slate-700 shadow-2xs flex items-center justify-between cursor-pointer transition-all group"
+            title="Clique para gerenciar perfil, senha e permissões"
+          >
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-slate-900 dark:bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-blue-600 transition-colors">
                 {user.name.slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0">
-                <span className="text-xs font-bold text-[#1A1D21] block truncate">{user.name}</span>
-                <span className="text-[10px] text-slate-500 font-mono block truncate">{user.role}</span>
+                <span className="text-xs font-bold text-[#1A1D21] dark:text-white block truncate">{user.name}</span>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono block truncate">{user.role}</span>
               </div>
             </div>
 
             <button
-              onClick={logout}
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-              title="Sair da Conta"
+              onClick={(e) => {
+                e.stopPropagation();
+                logout();
+              }}
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-lg transition-colors cursor-pointer"
+              title="Sair da Conta (Logout)"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -253,7 +280,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ) : (
           <button
             onClick={onOpenLoginModal}
-            className="w-full py-2 px-3 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+            className="w-full py-2 px-3 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
           >
             <UserIcon className="w-4 h-4" />
             <span>Fazer Login</span>
@@ -265,7 +292,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             id="btn_open_simulator_sidebar"
             onClick={onOpenSimulator}
-            className="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+            className="w-full py-1.5 px-3 rounded-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
             <Smartphone className="w-3.5 h-3.5" />
             <span>Simulador Mobile</span>

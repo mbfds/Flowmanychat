@@ -1,6 +1,6 @@
-export type ChannelType = 'instagram' | 'messenger' | 'omnichannel';
+export type ChannelType = 'instagram' | 'messenger' | 'whatsapp' | 'telegram' | 'omnichannel';
 
-export type NavigationTab = 'flows' | 'triggers' | 'comment_tools' | 'broadcast' | 'inbox' | 'contacts' | 'analytics' | 'settings';
+export type NavigationTab = 'flows' | 'triggers' | 'comment_tools' | 'broadcast' | 'inbox' | 'contacts' | 'analytics' | 'whatsapp_groups' | 'settings';
 
 export type NodeType = 'trigger' | 'message' | 'condition' | 'action' | 'ai_step' | 'delay' | 'ab_split';
 
@@ -370,7 +370,7 @@ export interface SimulatorState {
   }>;
 }
 
-export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'completed' | 'cancelled';
+export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'completed' | 'cancelled' | 'paused';
 export type BroadcastType = 'standard' | 'utility';
 export type MetaApprovalStatus = 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED' | 'PAUSED';
 export type UtilityTemplateCategory = 'UTILITY' | 'AUTHENTICATION' | 'MARKETING';
@@ -580,16 +580,23 @@ export interface WebhookEndpointConfig {
 
 export interface WebhookDeliveryLog {
   id: string;
-  endpointId: string;
-  channel: 'instagram' | 'messenger';
-  event: WebhookEventType;
+  endpointId?: string;
+  endpointUrl?: string;
+  endpointName?: string;
+  method?: string;
+  channel: 'instagram' | 'messenger' | 'omnichannel' | string;
+  event: WebhookEventType | 'ping_test' | string;
   payload: any;
+  requestHeaders?: Record<string, string>;
   responseStatus: number;
+  responseStatusText?: string;
   responseBody?: string;
+  responseHeaders?: Record<string, string>;
   durationMs: number;
   timestamp: string;
   success: boolean;
   error?: string;
+  retryCount?: number;
 }
 
 export interface WebhookSettingsState {
@@ -871,4 +878,200 @@ export interface ProductionAuditReport {
     activeDomainsCount: number;
   };
 }
+
+// WhatsApp Group Administration & Monetization System Types
+export type WhatsAppEngineType = 'meta_cloud_api' | 'baileys_unofficial' | 'hybrid';
+
+export interface WhatsAppGroupAutoRules {
+  antiLink: boolean;
+  antiLinkAction: 'warn' | 'delete_msg' | 'kick_member';
+  antiSpam: boolean;
+  antiPorn: boolean;
+  antiForeignNumbers: boolean; // bloqueia números de fora do Brasil (+55) se ativo
+  autoWelcome: boolean;
+  welcomeMessage: string;
+  autoMuteSchedule: {
+    enabled: boolean;
+    muteTime: string; // Ex: '22:00'
+    unmuteTime: string; // Ex: '08:00'
+  };
+  autoKickExpiredVip: boolean;
+  smartLinkRotation: boolean;
+  sendDailyDigest: boolean;
+}
+
+export interface WhatsAppGroupPricing {
+  price: number; // R$
+  currency: 'BRL' | 'USD';
+  billingCycle: 'monthly' | 'quarterly' | 'semiannual' | 'annual' | 'lifetime';
+  checkoutUrl?: string;
+  pixKey?: string;
+  pixQrCode?: string;
+  benefits: string[];
+}
+
+export interface WhatsAppGroupStats {
+  totalJoined: number;
+  totalLeft: number;
+  currentMembers: number;
+  dailyJoinsHistory: { date: string; count: number; leftCount: number }[];
+  messagesCount24h: number;
+  activeMembersPercent: number;
+  churnRate: number; // %
+  revenueTotal: number; // R$
+  activeSubscribers: number;
+  expiringIn7Days: number;
+}
+
+export interface WhatsAppGroup {
+  id: string;
+  name: string;
+  jid: string; // ex: '120363028392819@g.us'
+  description: string;
+  avatarUrl: string;
+  inviteLink: string;
+  smartRotatorId?: string;
+  category: 'vip_monetized' | 'community' | 'launch_funnel' | 'support' | 'leads';
+  status: 'active' | 'full' | 'archived' | 'muted';
+  memberCount: number;
+  maxMembers: number; // normalmente 1024 no WhatsApp
+  isAdmin: boolean;
+  isVipMonetized: boolean;
+  pricing?: WhatsAppGroupPricing;
+  autoManagement: WhatsAppGroupAutoRules;
+  stats: WhatsAppGroupStats;
+  engine: WhatsAppEngineType; // híbrido: Cloud API para Webhooks + Baileys para Disparo/Adm
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GroupSubscriber {
+  id: string;
+  name: string;
+  phone: string;
+  avatarUrl?: string;
+  groupJid: string;
+  groupName: string;
+  status: 'active' | 'expiring_soon' | 'expired' | 'removed';
+  plan: 'Mensal VIP' | 'Trimestral' | 'Anual VIP' | 'Vitalício';
+  amountPaid: number;
+  paymentMethod: 'pix' | 'credit_card' | 'boleto';
+  joinedAt: string;
+  expiresAt: string;
+  lastPaymentAt: string;
+  autoRenew: boolean;
+  notes?: string;
+}
+
+export interface SmartLinkRotator {
+  id: string;
+  title: string;
+  slug: string; // ex: 'vip-investimentos' -> chat.manyflow.io/vip-investimentos
+  description: string;
+  targetGroupJids: string[];
+  maxMembersPerGroup: number;
+  totalClicks: number;
+  totalConversions: number;
+  conversionRate: number;
+  isActive: boolean;
+  redirectMode: 'sequential' | 'balanced' | 'least_filled';
+  createdAt: string;
+}
+
+export interface GroupBroadcastTask {
+  id: string;
+  title: string;
+  targetGroupJids: string[];
+  messageText: string;
+  mediaType?: 'text' | 'image' | 'video' | 'audio_ptt';
+  mediaUrl?: string;
+  mentionAll: boolean; // @todos
+  delayMinSeconds: number; // anti-ban delay (ex: 5s)
+  delayMaxSeconds: number; // (ex: 15s)
+  status: 'scheduled' | 'sending' | 'completed' | 'failed' | 'paused';
+  sentCount: number;
+  totalCount: number;
+  scheduledFor?: string;
+  createdAt: string;
+}
+
+export interface BaileysQueueItem {
+  id: string;
+  targetGroupJid: string;
+  groupName: string;
+  messageType: 'text' | 'image' | 'video' | 'audio_ptt' | 'document' | 'kick_member' | 'mute_chat';
+  previewContent: string;
+  mentionAll?: boolean;
+  antiBanDelaySec: number;
+  scheduledAt: string;
+  dispatchedAt?: string;
+  status: 'queued' | 'sending' | 'delivered' | 'read' | 'retry' | 'failed';
+  ackStatus?: 'PENDING' | 'SERVER_ACK' | 'DEVICE_ACK' | 'READ_ACK';
+  retryCount: number;
+  latencyMs?: number;
+  errorReason?: string;
+}
+
+export interface BaileysGroupSyncStatus {
+  groupJid: string;
+  groupName: string;
+  category: string;
+  connectionState: 'synced' | 'syncing' | 'reconnecting' | 'paused' | 'error';
+  memberCount: number;
+  role: 'superadmin' | 'admin' | 'member';
+  announceOnly: boolean; // only admin can send
+  lastSyncTimestamp: string;
+  pingMs: number;
+  deliveryRatePercent: number;
+  queuedMessagesCount: number;
+  antiLinkActive: boolean;
+  antiSpamActive: boolean;
+}
+
+export interface BaileysEventLog {
+  id: string;
+  timestamp: string;
+  event: string;
+  level: 'info' | 'warn' | 'error' | 'success';
+  details: string;
+  groupJid?: string;
+}
+
+export interface HybridWhatsAppEngineStatus {
+  cloudApi: {
+    isConnected: boolean;
+    phoneNumberId: string;
+    wabaId: string;
+    webhookUrl: string;
+    verifiedName: string;
+    tier: 'TIER_100K' | 'TIER_10K' | 'TIER_UNLIMITED';
+    qualityRating: 'GREEN' | 'YELLOW' | 'RED';
+  };
+  baileys: {
+    isConnected: boolean;
+    sessionId: string;
+    connectedNumber: string;
+    pushName: string;
+    batteryLevel?: number;
+    platform: 'multi-device-baileys-v6.7';
+    groupsCount: number;
+    lastPing: string;
+    qrCodeString?: string;
+    socketUptimeSeconds?: number;
+    reconnectCount?: number;
+    pendingQueueCount?: number;
+    heapMemoryMb?: number;
+    circuitBreakerOpen?: boolean;
+  };
+}
+
+export interface TelegramBotConfig {
+  botToken: string;
+  botUsername: string;
+  isConnected: boolean;
+  webhookUrl: string;
+  allowedUpdates: string[];
+  activeChatsCount: number;
+}
+
 

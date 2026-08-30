@@ -2,7 +2,8 @@ import {
   WebhookSettingsState, 
   MetaWebhookEventLog, 
   WebhookStatsSummary,
-  WebhookAutomationRouteResult
+  WebhookAutomationRouteResult,
+  WebhookDeliveryLog
 } from '../types';
 
 export interface SimulateMetaEventParams {
@@ -97,11 +98,22 @@ export const webhookService = {
   },
 
   // 5. Query Received Events Stream from MongoDB
-  async getEvents(filters?: { channel?: string; eventType?: string; limit?: number; skip?: number }): Promise<{ events: MetaWebhookEventLog[]; total: number }> {
+  async getEvents(filters?: { 
+    channel?: string; 
+    eventType?: string; 
+    status?: string; 
+    signature?: string; 
+    search?: string; 
+    limit?: number; 
+    skip?: number 
+  }): Promise<{ events: MetaWebhookEventLog[]; total: number }> {
     try {
       const params = new URLSearchParams();
       if (filters?.channel && filters.channel !== 'all') params.set('channel', filters.channel);
       if (filters?.eventType && filters.eventType !== 'all') params.set('eventType', filters.eventType);
+      if (filters?.status && filters.status !== 'all') params.set('status', filters.status);
+      if (filters?.signature && filters.signature !== 'all') params.set('signature', filters.signature);
+      if (filters?.search && filters.search.trim()) params.set('search', filters.search.trim());
       if (filters?.limit) params.set('limit', String(filters.limit));
       if (filters?.skip) params.set('skip', String(filters.skip));
 
@@ -112,6 +124,21 @@ export const webhookService = {
     } catch (error) {
       console.error('[webhookService] Error fetching events:', error);
       return { events: [], total: 0 };
+    }
+  },
+
+  // 5.1 Replay Webhook Event
+  async replayEvent(eventId: string, payload?: any, channel?: string): Promise<{ success: boolean; message: string; routing?: WebhookAutomationRouteResult }> {
+    try {
+      const response = await fetch('/api/webhooks/replay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId, payload, channel }),
+      });
+      return await response.json();
+    } catch (error: any) {
+      console.error('[webhookService] Error replaying event:', error);
+      return { success: false, message: error.message };
     }
   },
 
@@ -158,5 +185,100 @@ export const webhookService = {
       console.error('[webhookService] Error clearing events:', error);
       return 0;
     }
+  },
+
+  // 9. Fetch Webhook Delivery History (Requests & HTTP Status Codes)
+  async fetchDeliveries(params?: {
+    statusGroup?: string;
+    statusCode?: string | number;
+    channel?: string;
+    event?: string;
+    search?: string;
+    limit?: number;
+    skip?: number;
+  }): Promise<{ deliveries: WebhookDeliveryLog[]; total: number }> {
+    try {
+      const query = new URLSearchParams();
+      if (params?.statusGroup && params.statusGroup !== 'all') query.append('statusGroup', params.statusGroup);
+      if (params?.statusCode && params.statusCode !== 'all') query.append('statusCode', String(params.statusCode));
+      if (params?.channel && params.channel !== 'all') query.append('channel', params.channel);
+      if (params?.event && params.event !== 'all') query.append('event', params.event);
+      if (params?.search) query.append('search', params.search);
+      if (params?.limit) query.append('limit', String(params.limit));
+      if (params?.skip) query.append('skip', String(params.skip));
+
+      const response = await fetch(`/api/webhooks/deliveries?${query.toString()}`);
+      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+      const data = await response.json();
+      return {
+        deliveries: data.deliveries || [],
+        total: data.total || 0,
+      };
+    } catch (error) {
+      console.error('[webhookService] Error fetching deliveries:', error);
+      return { deliveries: [], total: 0 };
+    }
+  },
+
+  // 10. Retry / Re-dispatch a Specific Delivery
+  async retryDelivery(logId: string, simulatedStatus?: number): Promise<{ success: boolean; message: string; newLog?: WebhookDeliveryLog }> {
+    try {
+      const response = await fetch('/api/webhooks/deliveries/retry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logId, simulatedStatus }),
+      });
+      return await response.json();
+    } catch (error: any) {
+      console.error('[webhookService] Error retrying delivery:', error);
+      return { success: false, message: error.message };
+    }
+  },
+
+  // 11. Clear Webhook Delivery History
+  async clearDeliveries(): Promise<number> {
+    try {
+      const response = await fetch('/api/webhooks/deliveries', { method: 'DELETE' });
+      if (!response.ok) return 0;
+      const data = await response.json();
+      return data.deletedCount || 0;
+    } catch (error) {
+      console.error('[webhookService] Error clearing deliveries:', error);
+      return 0;
+    }
+  },
+
+  // 12. Fetch Delivery Summary Stats
+  async fetchDeliveryStats(): Promise<{
+    total: number;
+    s2xx: number;
+    s4xx: number;
+    s5xx: number;
+    avgLatencyMs: number;
+    successRate: number;
+  }> {
+    try {
+      const response = await fetch('/api/webhooks/deliveries/stats');
+      if (!response.ok) throw new Error('Stats request failed');
+      const data = await response.json();
+      return data.stats || { total: 0, s2xx: 0, s4xx: 0, s5xx: 0, avgLatencyMs: 0, successRate: 100 };
+    } catch (error) {
+      console.error('[webhookService] Error fetching delivery stats:', error);
+      return { total: 0, s2xx: 0, s4xx: 0, s5xx: 0, avgLatencyMs: 0, successRate: 100 };
+    }
+  },
+
+  // 13. Test Dispatch / Outbound Webhook Ping
+  async testDispatch(params: {
+    endpointUrl: string;
+    eventType: string;
+    channel: string;
+  }): Promise<{ success: boolean; statusCode: number; durationMs: number; responseBody: string; log: WebhookDeliveryLog }> {
+    const response = await fetch('/api/webhooks/test-dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    return await response.json();
   }
 };

@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ComponentLoader } from './components/Common/ComponentLoader';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { dbService } from './services/db';
 
 // Lazy-loaded heavy tab modules and modals for optimized bundle splitting & faster initial load
@@ -24,6 +25,9 @@ const ContactsCRM = lazy(() =>
 const AnalyticsDashboard = lazy(() =>
   import('./components/Analytics/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard }))
 );
+const WhatsAppGroupDashboard = lazy(() =>
+  import('./components/WhatsAppGroups/WhatsAppGroupDashboard').then((m) => ({ default: m.WhatsAppGroupDashboard }))
+);
 const SettingsHub = lazy(() =>
   import('./components/SettingsHub/SettingsHub').then((m) => ({ default: m.SettingsHub }))
 );
@@ -38,6 +42,9 @@ const AIFlowGeneratorModal = lazy(() =>
 );
 const LoginPage = lazy(() =>
   import('./components/Auth/LoginPage').then((m) => ({ default: m.LoginPage }))
+);
+const UserProfileModal = lazy(() =>
+  import('./components/Auth/UserProfileModal').then((m) => ({ default: m.UserProfileModal }))
 );
 
 import {
@@ -78,6 +85,7 @@ function MainApp() {
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Sync with MongoDB Service on Mount
   useEffect(() => {
@@ -220,6 +228,7 @@ function MainApp() {
         unreadConversationsCount={conversations.filter((c) => c.status === 'human_takeover').length}
         onOpenSimulator={() => setIsSimulatorOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
+        onOpenProfileModal={() => setIsProfileModalOpen(true)}
       />
 
       {/* Main Content Workspace */}
@@ -238,7 +247,21 @@ function MainApp() {
 
         {/* Tab View Routing */}
         <main className="flex-1 flex overflow-hidden bg-[#F8F9FB]">
-          <Suspense fallback={<ComponentLoader label="Carregando módulo..." />}>
+          <Suspense fallback={
+            <ComponentLoader 
+              variant={currentTab as any} 
+              label={`Carregando ${
+                currentTab === 'flows' ? 'Editor Visual de Fluxos' : 
+                currentTab === 'analytics' ? 'Painel de Métricas & Funis' : 
+                currentTab === 'inbox' ? 'Atendimento ao Vivo (Inbox)' : 
+                currentTab === 'contacts' ? 'Gestão de Contatos & CRM' : 
+                currentTab === 'triggers' ? 'Gatilhos de Palavras-Chave' : 
+                currentTab === 'comment_tools' ? 'Automações de Comentários' :
+                currentTab === 'broadcast' ? 'Campanhas de Disparo em Massa' : 
+                'Central de Configurações'
+              }...`} 
+            />
+          }>
             {currentTab === 'flows' && (
               <FlowCanvas
                 flow={activeFlow}
@@ -299,8 +322,21 @@ function MainApp() {
             {currentTab === 'analytics' && (
               <AnalyticsDashboard
                 flows={flows}
+                broadcasts={broadcasts}
+                contacts={contacts}
+                conversations={conversations}
                 selectedFlowId={selectedFlowId}
                 onSelectFlow={setSelectedFlowId}
+                onOpenSimulator={(flowId) => {
+                  if (flowId) setSelectedFlowId(flowId);
+                  setIsSimulatorOpen(true);
+                }}
+                onUpdateFlow={handleUpdateFlow}
+              />
+            )}
+
+            {currentTab === 'whatsapp_groups' && (
+              <WhatsAppGroupDashboard
                 onOpenSimulator={(flowId) => {
                   if (flowId) setSelectedFlowId(flowId);
                   setIsSimulatorOpen(true);
@@ -316,6 +352,11 @@ function MainApp() {
                 onUpdateCustomFields={setCustomFields}
                 webhookSettings={webhookSettings}
                 onUpdateWebhookSettings={setWebhookSettings}
+                onOpenFlow={(flowId) => {
+                  setSelectedFlowId(flowId);
+                  setCurrentTab('flows');
+                }}
+                onOpenLiveChat={() => setCurrentTab('inbox')}
               />
             )}
           </Suspense>
@@ -346,15 +387,28 @@ function MainApp() {
           />
         </Suspense>
       )}
+
+      {/* User Profile & Account Management Modal */}
+      {isProfileModalOpen && (
+        <Suspense fallback={null}>
+          <UserProfileModal
+            isOpen={isProfileModalOpen}
+            onClose={() => setIsProfileModalOpen(false)}
+            onOpenLoginModal={() => setIsLoginModalOpen(true)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

@@ -108,5 +108,63 @@ export const authService = {
     } catch (err: any) {
       return { success: false, error: err.message };
     }
+  },
+
+  async resetPassword(email: string, code?: string, newPassword?: string): Promise<{ success: boolean; message?: string; demoCode?: string; error?: string }> {
+    try {
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code, newPassword }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Falha ao processar redefinição' };
+    }
+  },
+
+  async updateProfile(data: { id: string; name?: string; avatarUrl?: string; currentPassword?: string; newPassword?: string }): Promise<{ success: boolean; user?: User; error?: string }> {
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const resData = await res.json();
+      if (resData.success && resData.user) {
+        const storedTenant = this.getLocalTenant();
+        const storedToken = this.getToken();
+        if (storedToken && storedTenant) {
+          this.setSession(storedToken, resData.user, storedTenant);
+        }
+      }
+      return resData;
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Falha ao atualizar perfil' };
+    }
+  },
+
+  async updateUser(userId: string, data: { name?: string; role?: string; isActive?: boolean }): Promise<{ success: boolean; user?: User; error?: string }> {
+    try {
+      const res = await fetch(`/api/auth/users/${encodeURIComponent(userId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Falha ao atualizar usuário' };
+    }
+  },
+
+  async deleteUser(userId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const res = await fetch(`/api/auth/users/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Falha ao remover usuário' };
+    }
   }
 };

@@ -24,8 +24,9 @@ import {
   Tag,
   Trophy
 } from 'lucide-react';
-import { Flow } from '../../types';
+import { Flow, BroadcastCampaign, Contact, LiveConversation } from '../../types';
 import { ComponentLoader } from '../Common/ComponentLoader';
+import { PerformanceSummaryHeader } from './PerformanceSummaryHeader';
 
 const FlowFunnelView = lazy(() =>
   import('./FlowFunnelView').then((m) => ({ default: m.FlowFunnelView }))
@@ -36,16 +37,24 @@ const ABComparisonView = lazy(() =>
 
 interface AnalyticsDashboardProps {
   flows: Flow[];
+  broadcasts?: BroadcastCampaign[];
+  contacts?: Contact[];
+  conversations?: LiveConversation[];
   selectedFlowId?: string;
   onSelectFlow?: (flowId: string) => void;
   onOpenSimulator?: (flowId?: string) => void;
+  onUpdateFlow?: (updatedFlow: Flow) => void;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ 
   flows,
+  broadcasts = [],
+  contacts = [],
+  conversations = [],
   selectedFlowId,
   onSelectFlow,
-  onOpenSimulator
+  onOpenSimulator,
+  onUpdateFlow
 }) => {
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'funnel' | 'overview' | 'ab_testing' | 'bottlenecks'>('funnel');
   const [targetFlowForFunnel, setTargetFlowForFunnel] = useState<string>(
@@ -120,13 +129,23 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#F8F9FB] overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full bg-[#F8F9FB] overflow-y-auto select-none">
+      {/* Top Performance Summary Widgets Bar */}
+      <PerformanceSummaryHeader
+        flows={flows}
+        broadcasts={broadcasts}
+        contacts={contacts}
+        conversations={conversations}
+        onOpenFlow={handleInspectFunnel}
+        onOpenSimulator={onOpenSimulator}
+      />
+
       {/* Secondary Navigation Subheader */}
-      <div className="bg-white border-b border-[#E2E8F0] px-6 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-1.5 bg-[#F8F9FB] p-1 rounded-xl border border-[#E2E8F0]">
+      <div className="bg-white border-b border-[#E2E8F0] px-6 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 sticky top-0 z-10 shadow-2xs">
+        <div className="flex items-center gap-1.5 bg-[#F8F9FB] p-1 rounded-xl border border-[#E2E8F0] overflow-x-auto">
           <button
             onClick={() => setActiveAnalyticsTab('funnel')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAnalyticsTab === 'funnel'
                 ? 'bg-white text-[#0084FF] shadow-xs border border-blue-100'
                 : 'text-[#64748B] hover:text-[#1A1D21]'
@@ -141,7 +160,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
           <button
             onClick={() => setActiveAnalyticsTab('overview')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAnalyticsTab === 'overview'
                 ? 'bg-white text-[#0084FF] shadow-xs border border-blue-100'
                 : 'text-[#64748B] hover:text-[#1A1D21]'
@@ -153,7 +172,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
           <button
             onClick={() => setActiveAnalyticsTab('ab_testing')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAnalyticsTab === 'ab_testing'
                 ? 'bg-white text-fuchsia-700 shadow-xs border border-fuchsia-200'
                 : 'text-[#64748B] hover:text-[#1A1D21]'
@@ -168,7 +187,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
           <button
             onClick={() => setActiveAnalyticsTab('bottlenecks')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAnalyticsTab === 'bottlenecks'
                 ? 'bg-white text-[#0084FF] shadow-xs border border-blue-100'
                 : 'text-[#64748B] hover:text-[#1A1D21]'
@@ -181,14 +200,14 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 
         {/* Global Quick Action */}
         <div className="flex items-center gap-2 text-xs font-semibold text-[#64748B]">
-          <span>Métricas atualizadas em tempo real</span>
+          <span>Métricas sincronizadas com Graph API</span>
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
         </div>
       </div>
 
       {/* Main Tab Content */}
       <div className="flex-1 flex overflow-hidden">
-        <Suspense fallback={<ComponentLoader label="Carregando visualização analítica..." />}>
+        <Suspense fallback={<ComponentLoader variant="analytics" label="Carregando visualização analítica..." />}>
         {/* TAB 1: FUNNEL VISUALIZATION (Nó a Nó) */}
         {activeAnalyticsTab === 'funnel' && (
           <FlowFunnelView
@@ -403,6 +422,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
               if (onSelectFlow) onSelectFlow(id);
             }}
             onOpenSimulator={onOpenSimulator}
+            onUpdateFlow={onUpdateFlow}
           />
         )}
 

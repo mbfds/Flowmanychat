@@ -10,25 +10,32 @@ import {
   Save, 
   Check, 
   Link, 
-  RefreshCw,
-  Clock,
-  HelpCircle,
-  Variable,
-  Layers,
-  Webhook,
-  Database,
-  Cpu,
-  Activity,
-  Gauge
+  RefreshCw, 
+  Clock, 
+  HelpCircle, 
+  Variable, 
+  Layers, 
+  Webhook, 
+  Database, 
+  Cpu, 
+  Activity, 
+  Gauge,
+  Terminal,
+  Radio,
+  Globe,
+  Rocket,
+  MessageCircle
 } from 'lucide-react';
 import { BotKnowledgeBase, CustomFieldDefinition, WebhookSettingsState } from '../../types';
 import { CustomFieldsManager } from './CustomFieldsManager';
 import { WebhooksManager } from './WebhooksManager';
+import { WebhookLogsViewer } from './WebhookLogsViewer';
 import { DatabaseManager } from './DatabaseManager';
 import { FacebookRateLimitMonitor } from './FacebookRateLimitMonitor';
 import { DomainManager } from './DomainManager';
 import { ProductionDeployHub } from './ProductionDeployHub';
-import { Globe, Rocket } from 'lucide-react';
+import { TeamUserManager } from './TeamUserManager';
+import { Users } from 'lucide-react';
 
 interface SettingsHubProps {
   knowledgeBase: BotKnowledgeBase;
@@ -37,6 +44,8 @@ interface SettingsHubProps {
   onUpdateCustomFields: (fields: CustomFieldDefinition[]) => void;
   webhookSettings?: WebhookSettingsState;
   onUpdateWebhookSettings?: (settings: WebhookSettingsState) => void;
+  onOpenFlow?: (flowId: string) => void;
+  onOpenLiveChat?: (contactId: string) => void;
 }
 
 export const SettingsHub: React.FC<SettingsHubProps> = ({
@@ -45,9 +54,11 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   customFields,
   onUpdateCustomFields,
   webhookSettings,
-  onUpdateWebhookSettings
+  onUpdateWebhookSettings,
+  onOpenFlow,
+  onOpenLiveChat
 }) => {
-  const [activeTab, setActiveTab] = useState<'production' | 'domains' | 'rate_limits' | 'custom_fields' | 'database' | 'webhooks' | 'meta_ai'>('production');
+  const [activeTab, setActiveTab] = useState<'production' | 'domains' | 'team' | 'rate_limits' | 'webhook_logs' | 'webhooks' | 'custom_fields' | 'database' | 'meta_ai'>('production');
   const [formData, setFormData] = useState<BotKnowledgeBase>(knowledgeBase);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -67,7 +78,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
             <span>Configurações, Multi-Domínio & Produção</span>
           </h2>
           <p className="text-xs text-[#64748B]">
-            Gerencie múltiplos domínios em servidor único, banco MongoDB, deploy para aaPanel e cotas Meta API.
+            Gerencie múltiplos domínios em servidor único, logs de webhooks em tempo real, banco MongoDB, deploy para aaPanel e cotas Meta API.
           </p>
         </div>
 
@@ -101,19 +112,33 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         </button>
 
         <button
-          id="tab_settings_domains"
-          onClick={() => setActiveTab('domains')}
+          id="tab_settings_webhook_logs"
+          onClick={() => setActiveTab('webhook_logs')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'domains'
-              ? 'border-blue-600 text-blue-600'
+            activeTab === 'webhook_logs'
+              ? 'border-[#0084FF] text-[#0084FF] bg-blue-50/50 rounded-t-lg'
               : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
           }`}
         >
-          <Globe className="w-4 h-4 text-blue-600" />
-          <span>Domínios & Multi-Tenant</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800">
-            1 Banco Único
+          <Terminal className="w-4 h-4 text-[#0084FF]" />
+          <span>Logs de Webhook (Tempo Real)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Ao Vivo
           </span>
+        </button>
+
+        <button
+          id="tab_settings_webhooks"
+          onClick={() => setActiveTab('webhooks')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'webhooks'
+              ? 'border-[#0084FF] text-[#0084FF]'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Webhook className="w-4 h-4 text-blue-600" />
+          <span>Webhooks Meta (Configuração)</span>
         </button>
 
         <button
@@ -130,6 +155,38 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             14% Seguro
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_domains"
+          onClick={() => setActiveTab('domains')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'domains'
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Globe className="w-4 h-4 text-blue-600" />
+          <span>Domínios & Multi-Tenant</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800">
+            1 Banco Único
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_team"
+          onClick={() => setActiveTab('team')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'team'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Users className="w-4 h-4 text-indigo-600" />
+          <span>Equipe & Permissões (RBAC)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800">
+            Multi-User
           </span>
         </button>
 
@@ -163,19 +220,6 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         </button>
 
         <button
-          id="tab_settings_webhooks"
-          onClick={() => setActiveTab('webhooks')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'webhooks'
-              ? 'border-[#0084FF] text-[#0084FF]'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Webhook className="w-4 h-4 text-blue-600" />
-          <span>Webhooks Meta (Graph API)</span>
-        </button>
-
-        <button
           id="tab_settings_meta_ai"
           onClick={() => setActiveTab('meta_ai')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
@@ -194,9 +238,22 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         <ProductionDeployHub />
       )}
 
+      {/* Tab: WEBHOOK REAL-TIME LOGS VIEWER */}
+      {activeTab === 'webhook_logs' && (
+        <WebhookLogsViewer
+          onOpenFlow={onOpenFlow}
+          onOpenLiveChat={onOpenLiveChat}
+        />
+      )}
+
       {/* Tab: MULTI-DOMAIN & WHITE-LABEL */}
       {activeTab === 'domains' && (
         <DomainManager />
+      )}
+
+      {/* Tab: TEAM & RBAC PERMISSIONS */}
+      {activeTab === 'team' && (
+        <TeamUserManager />
       )}
 
       {/* Tab: RATE LIMITS MONITOR */}
@@ -222,6 +279,8 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         <WebhooksManager
           initialSettings={webhookSettings}
           onSaveSettings={onUpdateWebhookSettings}
+          onOpenFlow={onOpenFlow}
+          onOpenLiveChat={onOpenLiveChat}
         />
       )}
 
@@ -275,6 +334,60 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
                 </div>
                 <p className="text-[11px] text-[#64748B]">
                   Permissões ativas: <code className="font-mono text-gray-600">pages_messaging</code>, <code className="font-mono text-gray-600">pages_manage_metadata</code>.
+                </p>
+              </div>
+
+              {/* WhatsApp Hybrid Engine (Cloud API + Baileys) */}
+              <div className="p-4 rounded-lg bg-emerald-50/40 border border-emerald-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-emerald-600 text-white shadow-xs">
+                      <MessageCircle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-[#1A1D21]">WhatsApp Híbrido</h4>
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase">
+                          Cloud API + Baileys
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-[#64748B]">+55 (11) 98765-4321 • 32 Grupos Ativos</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                    100% Online
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[11px] pt-1">
+                  <div className="bg-white/80 p-2 rounded border border-emerald-200">
+                    <span className="text-[10px] font-bold text-slate-500 block">Recepção de Dados</span>
+                    <span className="font-bold text-emerald-700">Meta Cloud API (Oficial)</span>
+                  </div>
+                  <div className="bg-white/80 p-2 rounded border border-emerald-200">
+                    <span className="text-[10px] font-bold text-slate-500 block">Envio & Grupos</span>
+                    <span className="font-bold text-emerald-700">Baileys Engine (Admin)</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Telegram Bot */}
+              <div className="p-4 rounded-lg bg-sky-50/40 border border-sky-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-sky-500 text-white shadow-xs">
+                      <Radio className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-[#1A1D21]">@ManyFlowOfficialBot</h4>
+                      <span className="text-[10px] text-[#64748B]">Telegram Bot API v7.2</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">
+                    Conectado
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#64748B]">
+                  Webhook registrado e ouvindo comandos <code className="font-mono text-sky-700">/start</code>, inline buttons e canais.
                 </p>
               </div>
 

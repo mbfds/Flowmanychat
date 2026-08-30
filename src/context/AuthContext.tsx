@@ -15,6 +15,8 @@ interface AuthContextType {
   register: (name: string, email: string, password?: string, workspaceName?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   switchTenant: (tenantId: string) => Promise<void>;
+  updateProfile: (data: { name?: string; avatarUrl?: string; currentPassword?: string; newPassword?: string }) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (email: string, code?: string, newPassword?: string) => Promise<{ success: boolean; message?: string; demoCode?: string; error?: string }>;
   refreshSession: () => Promise<void>;
   refreshDomains: () => Promise<void>;
 }
@@ -122,6 +124,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (data: { name?: string; avatarUrl?: string; currentPassword?: string; newPassword?: string }) => {
+    if (!user) return { success: false, error: 'Usuário não autenticado' };
+    const res = await authService.updateProfile({ id: user.id, ...data });
+    if (res.success && res.user) {
+      setUser(res.user);
+      return { success: true };
+    }
+    return { success: false, error: res.error || 'Erro ao atualizar perfil' };
+  };
+
+  const resetPassword = async (email: string, code?: string, newPassword?: string) => {
+    return await authService.resetPassword(email, code, newPassword);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -136,6 +152,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         logout,
         switchTenant,
+        updateProfile,
+        resetPassword,
         refreshSession,
         refreshDomains,
       }}

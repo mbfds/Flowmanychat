@@ -41,10 +41,13 @@ import {
   WebhookAutomationRouteResult
 } from '../../types';
 import { webhookService, SimulateMetaEventParams, SimulateMetaEventResponse } from '../../services/webhookService';
+import { WebhookRequestHistoryTable } from './WebhookRequestHistoryTable';
 
 interface WebhooksManagerProps {
   initialSettings?: WebhookSettingsState;
   onSaveSettings?: (settings: WebhookSettingsState) => void;
+  onOpenFlow?: (flowId: string) => void;
+  onOpenLiveChat?: (contactId: string) => void;
 }
 
 const AVAILABLE_EVENTS: { id: WebhookEventType; label: string; description: string; channel: 'instagram' | 'messenger' | 'omnichannel' }[] = [
@@ -100,10 +103,12 @@ const AVAILABLE_EVENTS: { id: WebhookEventType; label: string; description: stri
 
 export const WebhooksManager: React.FC<WebhooksManagerProps> = ({
   initialSettings,
-  onSaveSettings
+  onSaveSettings,
+  onOpenFlow,
+  onOpenLiveChat
 }) => {
   // Navigation tabs inside Webhooks Manager
-  const [activeTab, setActiveTab] = useState<'endpoints' | 'simulator' | 'stream' | 'handshake'>('endpoints');
+  const [activeTab, setActiveTab] = useState<'endpoints' | 'deliveries' | 'simulator' | 'stream' | 'handshake'>('endpoints');
 
   // State for settings
   const [settings, setSettings] = useState<WebhookSettingsState>(() => {
@@ -499,6 +504,21 @@ export const WebhooksManager: React.FC<WebhooksManagerProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveTab('deliveries')}
+          className={`py-1.5 px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+            activeTab === 'deliveries'
+              ? 'bg-white text-[#1A1D21] shadow-xs'
+              : 'text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Activity className="w-3.5 h-3.5 text-[#0084FF]" />
+          <span>Histórico de Requisições & Status HTTP</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800">
+            200/404/500
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('simulator')}
           className={`py-1.5 px-3.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
             activeTab === 'simulator'
@@ -522,7 +542,7 @@ export const WebhooksManager: React.FC<WebhooksManagerProps> = ({
           }`}
         >
           <Activity className="w-3.5 h-3.5 text-purple-600" />
-          <span>Histórico de Eventos em Tempo Real</span>
+          <span>Stream Inbound Meta</span>
           {eventsList.length > 0 && (
             <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-purple-100 text-purple-700">
               {eventsList.length}
@@ -530,6 +550,11 @@ export const WebhooksManager: React.FC<WebhooksManagerProps> = ({
           )}
         </button>
       </div>
+
+      {/* TAB: REQUEST HISTORY & HTTP STATUS (200, 404, 500) */}
+      {activeTab === 'deliveries' && (
+        <WebhookRequestHistoryTable onOpenFlow={onOpenFlow} onOpenLiveChat={onOpenLiveChat} />
+      )}
 
       {/* TAB 1: ENDPOINTS & GRAPH API CREDENTIALS */}
       {activeTab === 'endpoints' && (

@@ -36,6 +36,7 @@ interface BroadcastDetailsDrawerProps {
   onClose: () => void;
   onSendNow: (campaignId: string) => void;
   onCancelSchedule: (campaignId: string) => void;
+  onOpenReschedule?: (campaign: BroadcastCampaign) => void;
   onDuplicate: (campaign: BroadcastCampaign) => void;
   onDelete: (campaignId: string) => void;
   contacts: Contact[];
@@ -47,6 +48,7 @@ export const BroadcastDetailsDrawer: React.FC<BroadcastDetailsDrawerProps> = ({
   onClose,
   onSendNow,
   onCancelSchedule,
+  onOpenReschedule,
   onDuplicate,
   onDelete,
   contacts,
@@ -253,10 +255,21 @@ export const BroadcastDetailsDrawer: React.FC<BroadcastDetailsDrawerProps> = ({
           {campaign.scheduledFor && (
             <div className="flex items-center justify-between">
               <span className="text-[#64748B] font-medium">Data Agendada:</span>
-              <span className="font-semibold text-amber-800 flex items-center gap-1">
-                <Calendar className="w-3.5 h-3.5 text-amber-600" />
-                {new Date(campaign.scheduledFor).toLocaleString('pt-BR')}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-amber-800 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                  {new Date(campaign.scheduledFor).toLocaleString('pt-BR')}
+                </span>
+                {onOpenReschedule && campaign.status === 'scheduled' && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenReschedule(campaign)}
+                    className="text-[11px] font-bold text-amber-700 hover:text-amber-900 underline cursor-pointer"
+                  >
+                    Alterar
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -474,6 +487,16 @@ export const BroadcastDetailsDrawer: React.FC<BroadcastDetailsDrawerProps> = ({
         <div className="flex items-center gap-2">
           {campaign.status === 'scheduled' && (
             <>
+              {onOpenReschedule && (
+                <button
+                  type="button"
+                  onClick={() => onOpenReschedule(campaign)}
+                  className="px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Reagendar</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onCancelSchedule(campaign.id)}

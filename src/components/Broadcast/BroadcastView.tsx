@@ -41,6 +41,8 @@ import { UtilityTemplateModal } from './UtilityTemplateModal';
 import { UtilityTemplateDetailsDrawer } from './UtilityTemplateDetailsDrawer';
 import { GuzzleBatchModal } from './GuzzleBatchModal';
 import { FacebookBatchStudio } from './FacebookBatchStudio';
+import { BroadcastQueueManager } from './BroadcastQueueManager';
+import { RescheduleModal } from './RescheduleModal';
 
 interface BroadcastViewProps {
   broadcasts: BroadcastCampaign[];
@@ -61,8 +63,11 @@ export const BroadcastView: React.FC<BroadcastViewProps> = ({
   customFields = [],
   onOpenSimulator
 }) => {
-  // Main view navigation tab: 'campaigns' | 'utility_templates' | 'batch_studio'
-  const [activeSubTab, setActiveSubTab] = useState<'campaigns' | 'utility_templates' | 'batch_studio'>('campaigns');
+  // Main view navigation tab: 'campaigns' | 'queue_manager' | 'utility_templates' | 'batch_studio'
+  const [activeSubTab, setActiveSubTab] = useState<'campaigns' | 'queue_manager' | 'utility_templates' | 'batch_studio'>('campaigns');
+
+  // Reschedule Modal State
+  const [rescheduleCampaign, setRescheduleCampaign] = useState<BroadcastCampaign | null>(null);
 
   // Campaigns Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -220,6 +225,25 @@ export const BroadcastView: React.FC<BroadcastViewProps> = ({
     const updated = broadcasts.map((b) => {
       if (b.id === campaignId) {
         return { ...b, status: 'cancelled' as const };
+      }
+      return b;
+    });
+    onUpdateBroadcasts(updated);
+
+    if (selectedCampaignForDetails && selectedCampaignForDetails.id === campaignId) {
+      setSelectedCampaignForDetails(updated.find((b) => b.id === campaignId) || null);
+    }
+  };
+
+  // Save Reschedule
+  const handleSaveReschedule = (campaignId: string, newScheduledFor: string) => {
+    const updated = broadcasts.map((b) => {
+      if (b.id === campaignId) {
+        return {
+          ...b,
+          scheduledFor: newScheduledFor,
+          status: 'scheduled' as const
+        };
       }
       return b;
     });
@@ -403,24 +427,43 @@ export const BroadcastView: React.FC<BroadcastViewProps> = ({
         </div>
 
         {/* Sub-Navigation Tabs */}
-        <div className="flex items-center gap-4 mt-6 border-b border-gray-100">
+        <div className="flex items-center gap-4 mt-6 border-b border-gray-100 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveSubTab('campaigns')}
-            className={`pb-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            className={`pb-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
               activeSubTab === 'campaigns'
                 ? 'border-[#0084FF] text-[#0084FF]'
                 : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
             }`}
           >
             <Radio className="w-4 h-4" />
-            <span>Transmissões Disparadas & Agendadas ({broadcasts.length})</span>
+            <span>Todas as Campanhas ({broadcasts.length})</span>
+          </button>
+
+          <button
+            type="button"
+            id="tab_broadcast_queue"
+            onClick={() => setActiveSubTab('queue_manager')}
+            className={`pb-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              activeSubTab === 'queue_manager'
+                ? 'border-amber-600 text-amber-800'
+                : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+            }`}
+          >
+            <Clock className="w-4 h-4 text-amber-600" />
+            <span>Fila de Disparos & Agendamentos ({scheduledCount})</span>
+            {scheduledCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-extrabold bg-amber-100 text-amber-900 border border-amber-300">
+                {scheduledCount} ativo{scheduledCount > 1 ? 's' : ''}
+              </span>
+            )}
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubTab('utility_templates')}
-            className={`pb-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            className={`pb-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
               activeSubTab === 'utility_templates'
                 ? 'border-purple-600 text-purple-700'
                 : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
@@ -437,7 +480,7 @@ export const BroadcastView: React.FC<BroadcastViewProps> = ({
             type="button"
             id="tab_batch_processing"
             onClick={() => setActiveSubTab('batch_studio')}
-            className={`pb-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+            className={`pb-3 text-xs font-bold border-b-2 transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
               activeSubTab === 'batch_studio'
                 ? 'border-indigo-600 text-indigo-700'
                 : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
@@ -729,15 +772,27 @@ export const BroadcastView: React.FC<BroadcastViewProps> = ({
                     {/* Right: Quick Actions */}
                     <div className="flex items-center gap-2 shrink-0 border-t lg:border-t-0 border-gray-100 pt-3 lg:pt-0">
                       {campaign.status === 'scheduled' && (
-                        <button
-                          type="button"
-                          onClick={() => handleSendNow(campaign.id)}
-                          title="Disparar Agora"
-                          className="p-2 rounded-lg bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Disparar Já</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleSendNow(campaign.id)}
+                            title="Disparar Agora"
+                            className="p-2 rounded-lg bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Disparar Já</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setRescheduleCampaign(campaign)}
+                            title="Reagendar Data e Hora"
+                            className="p-2 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            <Calendar className="w-3.5 h-3.5 text-amber-700" />
+                            <span className="hidden sm:inline">Reagendar</span>
+                          </button>
+                        </>
                       )}
 
                       {campaign.status === 'draft' && (
@@ -818,7 +873,26 @@ export const BroadcastView: React.FC<BroadcastViewProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* SUBTAB 2: UTILITY TEMPLATES (AQUELE QUE PRECISA APROVAR) */}
+        {/* SUBTAB 2: QUEUE & DISPATCH MANAGER (NOVO GERENCIADOR DE FILA META) */}
+        {/* ========================================================================= */}
+        {activeSubTab === 'queue_manager' && (
+          <BroadcastQueueManager
+            broadcasts={broadcasts}
+            onUpdateBroadcasts={onUpdateBroadcasts}
+            onSendNow={handleSendNow}
+            onCancelSchedule={handleCancelSchedule}
+            onOpenReschedule={(camp) => setRescheduleCampaign(camp)}
+            onOpenDetails={(camp) => setSelectedCampaignForDetails(camp)}
+            onCreateNew={() => {
+              setInitialUtilityTemplateForCreator(null);
+              setIsCreatorOpen(true);
+            }}
+            contacts={contacts}
+          />
+        )}
+
+        {/* ========================================================================= */}
+        {/* SUBTAB 3: UTILITY TEMPLATES (AQUELE QUE PRECISA APROVAR) */}
         {/* ========================================================================= */}
         {activeSubTab === 'utility_templates' && (
           <div className="space-y-6">
@@ -1123,11 +1197,22 @@ export const BroadcastView: React.FC<BroadcastViewProps> = ({
         onClose={() => setSelectedCampaignForDetails(null)}
         onSendNow={handleSendNow}
         onCancelSchedule={handleCancelSchedule}
+        onOpenReschedule={(camp) => setRescheduleCampaign(camp)}
         onDuplicate={handleDuplicate}
         onDelete={handleDelete}
         contacts={contacts}
         customFields={customFields}
       />
+
+      {/* Reschedule Modal */}
+      {rescheduleCampaign && (
+        <RescheduleModal
+          isOpen={!!rescheduleCampaign}
+          onClose={() => setRescheduleCampaign(null)}
+          campaign={rescheduleCampaign}
+          onSaveSchedule={handleSaveReschedule}
+        />
+      )}
 
       {/* Utility Template Creation & Meta Review Modal */}
       <UtilityTemplateModal

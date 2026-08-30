@@ -152,7 +152,52 @@ export const BroadcastCreatorModal: React.FC<BroadcastCreatorModalProps> = ({
     tomorrow.setDate(tomorrow.getDate() + 1);
     return tomorrow.toISOString().slice(0, 10);
   });
-  const [scheduledTime, setScheduledTime] = useState('19:00');
+  const [scheduledTime, setScheduledTime] = useState('19:30');
+  const [schedulePreset, setSchedulePreset] = useState<string>('custom');
+
+  // Quick preset helper
+  const applySchedulePreset = (type: 'in_15m' | 'today_20h' | 'tomorrow_9h' | 'tomorrow_19h30') => {
+    const now = new Date();
+    if (type === 'in_15m') {
+      now.setMinutes(now.getMinutes() + 15);
+      setScheduledDate(now.toISOString().slice(0, 10));
+      setScheduledTime(`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`);
+      setSchedulePreset('in_15m');
+    } else if (type === 'today_20h') {
+      setScheduledDate(now.toISOString().slice(0, 10));
+      setScheduledTime('20:00');
+      setSchedulePreset('today_20h');
+    } else if (type === 'tomorrow_9h') {
+      now.setDate(now.getDate() + 1);
+      setScheduledDate(now.toISOString().slice(0, 10));
+      setScheduledTime('09:00');
+      setSchedulePreset('tomorrow_9h');
+    } else if (type === 'tomorrow_19h30') {
+      now.setDate(now.getDate() + 1);
+      setScheduledDate(now.toISOString().slice(0, 10));
+      setScheduledTime('19:30');
+      setSchedulePreset('tomorrow_19h30');
+    }
+  };
+
+  const getFormattedSchedulePreview = () => {
+    try {
+      const d = new Date(`${scheduledDate}T${scheduledTime}:00`);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleString('pt-BR', {
+          weekday: 'long',
+          day: '2-digit',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+    } catch {
+      return `${scheduledDate} às ${scheduledTime}`;
+    }
+    return `${scheduledDate} às ${scheduledTime}`;
+  };
 
   // AI Generator in Modal State
   const [isGeneratingCopy, setIsGeneratingCopy] = useState(false);
@@ -331,7 +376,16 @@ export const BroadcastCreatorModal: React.FC<BroadcastCreatorModalProps> = ({
         customFieldValue: customFieldKey ? customFieldValue : undefined,
         contactStatus
       },
-      scheduledFor: !isImmediate && !isDraft ? `${scheduledDate}T${scheduledTime}:00Z` : undefined,
+      scheduledFor: !isImmediate && !isDraft 
+        ? (() => {
+            try {
+              const d = new Date(`${scheduledDate}T${scheduledTime}:00`);
+              return !isNaN(d.getTime()) ? d.toISOString() : `${scheduledDate}T${scheduledTime}:00Z`;
+            } catch {
+              return `${scheduledDate}T${scheduledTime}:00Z`;
+            }
+          })()
+        : undefined,
       createdAt: new Date().toISOString(),
       sentAt: isImmediate ? new Date().toISOString() : undefined,
       totalTargeted: matchingContacts.length,
@@ -1145,25 +1199,103 @@ export const BroadcastCreatorModal: React.FC<BroadcastCreatorModalProps> = ({
 
               {/* Schedule Fields */}
               {sendOption === 'schedule' && (
-                <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-3">
+                  {/* Quick Presets */}
                   <div>
-                    <label className="text-xs font-semibold text-amber-950 block mb-1">Data do Envio:</label>
-                    <input
-                      type="date"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-lg border border-amber-300 bg-white font-medium"
-                    />
+                    <label className="text-[11px] font-bold text-amber-950 uppercase tracking-wider block mb-1.5">
+                      Atalhos Rápidos de Agendamento
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => applySchedulePreset('in_15m')}
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold border text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                          schedulePreset === 'in_15m'
+                            ? 'border-amber-500 bg-white text-amber-950 font-bold shadow-2xs'
+                            : 'border-amber-200/80 hover:border-amber-300 text-amber-900 bg-white/60'
+                        }`}
+                      >
+                        <Zap className="w-3 h-3 text-amber-600 shrink-0" />
+                        <span>Em 15 min</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applySchedulePreset('today_20h')}
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold border text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                          schedulePreset === 'today_20h'
+                            ? 'border-amber-500 bg-white text-amber-950 font-bold shadow-2xs'
+                            : 'border-amber-200/80 hover:border-amber-300 text-amber-900 bg-white/60'
+                        }`}
+                      >
+                        <Clock className="w-3 h-3 text-blue-600 shrink-0" />
+                        <span>Hoje 20h00</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applySchedulePreset('tomorrow_9h')}
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold border text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                          schedulePreset === 'tomorrow_9h'
+                            ? 'border-amber-500 bg-white text-amber-950 font-bold shadow-2xs'
+                            : 'border-amber-200/80 hover:border-amber-300 text-amber-900 bg-white/60'
+                        }`}
+                      >
+                        <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>Amanhã 09h</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applySchedulePreset('tomorrow_19h30')}
+                        className={`py-1.5 px-2.5 rounded-lg text-xs font-semibold border text-left transition-all cursor-pointer flex items-center gap-1.5 ${
+                          schedulePreset === 'tomorrow_19h30'
+                            ? 'border-amber-500 bg-white text-amber-950 font-bold shadow-2xs'
+                            : 'border-amber-200/80 hover:border-amber-300 text-amber-900 bg-white/60'
+                        }`}
+                      >
+                        <Calendar className="w-3 h-3 text-purple-600 shrink-0" />
+                        <span>Amanhã 19h30</span>
+                      </button>
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="text-xs font-semibold text-amber-950 block mb-1">Horário (Fuso de Brasília):</label>
-                    <input
-                      type="time"
-                      value={scheduledTime}
-                      onChange={(e) => setScheduledTime(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-lg border border-amber-300 bg-white font-medium"
-                    />
+                  {/* Pickers */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/80">
+                    <div>
+                      <label className="text-xs font-semibold text-amber-950 block mb-1">Data do Envio:</label>
+                      <input
+                        type="date"
+                        value={scheduledDate}
+                        onChange={(e) => {
+                          setScheduledDate(e.target.value);
+                          setSchedulePreset('custom');
+                        }}
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-amber-300 bg-white font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-amber-950 block mb-1">Horário (Fuso de Brasília):</label>
+                      <input
+                        type="time"
+                        value={scheduledTime}
+                        onChange={(e) => {
+                          setScheduledTime(e.target.value);
+                          setSchedulePreset('custom');
+                        }}
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-amber-300 bg-white font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Formatted Confirmation Note */}
+                  <div className="pt-2 border-t border-amber-200/80 flex items-start gap-2 text-[11px] text-amber-900">
+                    <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold">Previsão de Execução: </span>
+                      <span className="font-bold capitalize">{getFormattedSchedulePreview()}</span>
+                    </div>
                   </div>
                 </div>
               )}
