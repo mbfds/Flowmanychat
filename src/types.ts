@@ -1074,4 +1074,124 @@ export interface TelegramBotConfig {
   activeChatsCount: number;
 }
 
+// Auto Moderation & Spam Shield Types
+export interface KeywordModerationRule {
+  id: string;
+  phrase: string;
+  matchType: 'contains' | 'exact' | 'regex' | 'wildcard';
+  severity: 'high' | 'medium' | 'low';
+  action: 'warn_and_delete' | 'delete_only' | 'instant_kick' | 'kick_and_blacklist';
+  enabled: boolean;
+  category: 'scam_crypto' | 'adult' | 'external_groups' | 'profanity' | 'piracy' | 'custom';
+}
+
+export interface DomainFilterRule {
+  id: string;
+  domainOrPattern: string;
+  type: 'whitelist' | 'blacklist';
+  description: string;
+  enabled: boolean;
+  actionIfBlacklisted: 'delete_only' | 'warn_and_delete' | 'instant_kick';
+}
+
+export interface AutoModerationConfig {
+  id: string;
+  groupJid?: string; // empty means global default
+  name: string;
+  enabled: boolean;
+  
+  // Keyword Filters
+  keywordFilter: {
+    enabled: boolean;
+    sensitivity: 'high' | 'standard' | 'low';
+    customKeywords: KeywordModerationRule[];
+    presetPacks: {
+      antiScamCrypto: boolean;
+      antiAdultContent: boolean;
+      antiExternalGroupInvites: boolean;
+      antiAggressiveProfanity: boolean;
+    };
+    defaultAction: 'warn_and_delete' | 'delete_only' | 'instant_kick' | 'kick_and_blacklist';
+  };
+
+  // Link Blocker
+  linkBlocker: {
+    enabled: boolean;
+    mode: 'block_all_except_whitelist' | 'block_blacklisted_only' | 'block_all_links';
+    allowAdminsToSendLinks: boolean;
+    allowMediaWithCaptionLinks: boolean;
+    domains: DomainFilterRule[];
+    action: 'delete_only' | 'warn_and_delete' | 'instant_kick' | 'kick_and_blacklist';
+    strikeLimitBeforeKick: number;
+  };
+
+  // Spam & Flood Behavior
+  spamBehavior: {
+    enabled: boolean;
+    maxMessagesWindow: number; // ex: 4 messages
+    windowSeconds: number; // in 5 seconds
+    blockDuplicateConsecutiveMsgs: boolean;
+    duplicateThreshold: number; // 2 identical messages
+    blockForeignPhoneNumbers: boolean;
+    allowedCountryCodes: string[]; // ['+55', '+351', '+1']
+    blockMassMentions: boolean; // block @all if sent by non-admin
+    blockContactCardsAndInvites: boolean;
+    actionOnViolation: 'warn_and_delete' | 'delete_only' | 'instant_kick' | 'kick_and_blacklist';
+    strikeLimit: number; // default 3
+    autoBlacklistOnKick: boolean;
+  };
+
+  // Automated Warning & Strike System
+  strikeSystem: {
+    enabled: boolean;
+    maxStrikes: number; // 3
+    strikeExpirationHours: number; // 24h
+    sendPublicWarningInGroup: boolean;
+    sendPrivateWarningDm: boolean;
+    warningMessageTemplate: string;
+    kickMessageTemplate: string;
+  };
+
+  stats: {
+    messagesScanned: number;
+    linksBlocked: number;
+    keywordsFiltered: number;
+    spamFloodsStopped: number;
+    membersKicked: number;
+    membersWarned: number;
+  };
+}
+
+export interface ModerationIncident {
+  id: string;
+  timestamp: string;
+  groupJid: string;
+  groupName: string;
+  memberPhone: string;
+  memberName: string;
+  memberAvatar?: string;
+  triggerType: 'keyword_violation' | 'link_blocker' | 'flood_spam' | 'duplicate_text' | 'foreign_prefix' | 'mass_mention' | 'vcard_spam' | 'blacklisted_user';
+  triggerDetail: string; // ex: "Link proibido detectado: t.me/joinchat_xyz"
+  originalMessage: string;
+  actionTaken: 'message_deleted' | 'member_warned' | 'member_kicked' | 'member_blacklisted' | 'quarantined';
+  strikeCount: number;
+  maxStrikes: number;
+  status: 'active' | 'reverted' | 'banned_permanently';
+  resolvedAt?: string;
+  canRevert: boolean;
+}
+
+export interface BlacklistedMember {
+  id: string;
+  phone: string;
+  name: string;
+  reason: string;
+  category: 'spammer' | 'phishing' | 'bad_actor' | 'abusive' | 'manual';
+  blockedAt: string;
+  blockedBy: string;
+  autoKickOnJoin: boolean;
+  totalAttemptsBlocked: number;
+}
+
+
 

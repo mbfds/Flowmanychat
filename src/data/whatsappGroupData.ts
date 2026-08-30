@@ -1,4 +1,19 @@
-import { WhatsAppGroup, GroupSubscriber, SmartLinkRotator, GroupBroadcastTask, HybridWhatsAppEngineStatus, TelegramBotConfig, BaileysQueueItem, BaileysGroupSyncStatus, BaileysEventLog } from '../types';
+import { 
+  WhatsAppGroup, 
+  GroupSubscriber, 
+  SmartLinkRotator, 
+  GroupBroadcastTask, 
+  HybridWhatsAppEngineStatus, 
+  TelegramBotConfig, 
+  BaileysQueueItem, 
+  BaileysGroupSyncStatus, 
+  BaileysEventLog,
+  AutoModerationConfig,
+  ModerationIncident,
+  BlacklistedMember,
+  KeywordModerationRule,
+  DomainFilterRule
+} from '../types';
 
 export const INITIAL_WHATSAPP_GROUPS: WhatsAppGroup[] = [
   {
@@ -640,3 +655,323 @@ export const INITIAL_TELEGRAM_CONFIG: TelegramBotConfig = {
   allowedUpdates: ['message', 'callback_query', 'chat_member'],
   activeChatsCount: 642
 };
+
+export const INITIAL_KEYWORD_RULES: KeywordModerationRule[] = [
+  {
+    id: 'kw_01',
+    phrase: 'urubu do pix',
+    matchType: 'contains',
+    severity: 'high',
+    action: 'kick_and_blacklist',
+    enabled: true,
+    category: 'scam_crypto'
+  },
+  {
+    id: 'kw_02',
+    phrase: 'renda extra sem sair de casa',
+    matchType: 'contains',
+    severity: 'high',
+    action: 'kick_and_blacklist',
+    enabled: true,
+    category: 'scam_crypto'
+  },
+  {
+    id: 'kw_03',
+    phrase: 'robô do pix',
+    matchType: 'contains',
+    severity: 'high',
+    action: 'kick_and_blacklist',
+    enabled: true,
+    category: 'scam_crypto'
+  },
+  {
+    id: 'kw_04',
+    phrase: 'compre seguidores instagram',
+    matchType: 'contains',
+    severity: 'medium',
+    action: 'warn_and_delete',
+    enabled: true,
+    category: 'scam_crypto'
+  },
+  {
+    id: 'kw_05',
+    phrase: 'grupo vip telegram',
+    matchType: 'contains',
+    severity: 'high',
+    action: 'warn_and_delete',
+    enabled: true,
+    category: 'external_groups'
+  },
+  {
+    id: 'kw_06',
+    phrase: 't.me/joinchat',
+    matchType: 'contains',
+    severity: 'high',
+    action: 'instant_kick',
+    enabled: true,
+    category: 'external_groups'
+  },
+  {
+    id: 'kw_07',
+    phrase: 'vagas home office r$',
+    matchType: 'contains',
+    severity: 'medium',
+    action: 'warn_and_delete',
+    enabled: true,
+    category: 'scam_crypto'
+  },
+  {
+    id: 'kw_08',
+    phrase: 'aposta certa 100% green',
+    matchType: 'contains',
+    severity: 'high',
+    action: 'kick_and_blacklist',
+    enabled: true,
+    category: 'scam_crypto'
+  }
+];
+
+export const INITIAL_DOMAIN_RULES: DomainFilterRule[] = [
+  {
+    id: 'dom_01',
+    domainOrPattern: 'chat.whatsapp.com',
+    type: 'blacklist',
+    description: 'Links de outros grupos do WhatsApp (Prevenção de roubo de leads)',
+    enabled: true,
+    actionIfBlacklisted: 'instant_kick'
+  },
+  {
+    id: 'dom_02',
+    domainOrPattern: 't.me',
+    type: 'blacklist',
+    description: 'Canais e grupos do Telegram',
+    enabled: true,
+    actionIfBlacklisted: 'instant_kick'
+  },
+  {
+    id: 'dom_03',
+    domainOrPattern: 'bit.ly',
+    type: 'blacklist',
+    description: 'Encurtadores anônimos de URLs suspeitas',
+    enabled: true,
+    actionIfBlacklisted: 'warn_and_delete'
+  },
+  {
+    id: 'dom_04',
+    domainOrPattern: 'cutt.ly',
+    type: 'blacklist',
+    description: 'Encurtador de links Cutt.ly',
+    enabled: true,
+    actionIfBlacklisted: 'warn_and_delete'
+  },
+  {
+    id: 'dom_05',
+    domainOrPattern: 'hotmart.com',
+    type: 'whitelist',
+    description: 'Domínio oficial de checkout seguro Hotmart',
+    enabled: true,
+    actionIfBlacklisted: 'delete_only'
+  },
+  {
+    id: 'dom_06',
+    domainOrPattern: 'kiwify.com.br',
+    type: 'whitelist',
+    description: 'Plataforma oficial de pagamentos Kiwify',
+    enabled: true,
+    actionIfBlacklisted: 'delete_only'
+  },
+  {
+    id: 'dom_07',
+    domainOrPattern: 'youtube.com',
+    type: 'whitelist',
+    description: 'Aulas e transmissões no YouTube',
+    enabled: true,
+    actionIfBlacklisted: 'delete_only'
+  },
+  {
+    id: 'dom_08',
+    domainOrPattern: 'manyflow.io',
+    type: 'whitelist',
+    description: 'Domínio da plataforma e rotadores ManyFlow',
+    enabled: true,
+    actionIfBlacklisted: 'delete_only'
+  }
+];
+
+export const INITIAL_MODERATION_CONFIG: AutoModerationConfig = {
+  id: 'mod_config_global',
+  name: 'Escudo Global Anti-Spam & Moderação Baileys',
+  enabled: true,
+  keywordFilter: {
+    enabled: true,
+    sensitivity: 'high',
+    customKeywords: INITIAL_KEYWORD_RULES,
+    presetPacks: {
+      antiScamCrypto: true,
+      antiAdultContent: true,
+      antiExternalGroupInvites: true,
+      antiAggressiveProfanity: true
+    },
+    defaultAction: 'warn_and_delete'
+  },
+  linkBlocker: {
+    enabled: true,
+    mode: 'block_all_except_whitelist',
+    allowAdminsToSendLinks: true,
+    allowMediaWithCaptionLinks: false,
+    domains: INITIAL_DOMAIN_RULES,
+    action: 'instant_kick',
+    strikeLimitBeforeKick: 1
+  },
+  spamBehavior: {
+    enabled: true,
+    maxMessagesWindow: 4,
+    windowSeconds: 5,
+    blockDuplicateConsecutiveMsgs: true,
+    duplicateThreshold: 2,
+    blockForeignPhoneNumbers: true,
+    allowedCountryCodes: ['+55', '+351', '+1'],
+    blockMassMentions: true,
+    blockContactCardsAndInvites: true,
+    actionOnViolation: 'instant_kick',
+    strikeLimit: 3,
+    autoBlacklistOnKick: true
+  },
+  strikeSystem: {
+    enabled: true,
+    maxStrikes: 3,
+    strikeExpirationHours: 24,
+    sendPublicWarningInGroup: true,
+    sendPrivateWarningDm: true,
+    warningMessageTemplate: '⚠️ @membro Atenção: A sua mensagem infringiu as regras da comunidade ({motivo}). Você recebeu o aviso {strike}/{maxStrikes}.',
+    kickMessageTemplate: '🚫 @membro foi removido automaticamente do grupo por atingir o limite de infrações anti-spam.'
+  },
+  stats: {
+    messagesScanned: 248920,
+    linksBlocked: 142,
+    keywordsFiltered: 87,
+    spamFloodsStopped: 34,
+    membersKicked: 19,
+    membersWarned: 48
+  }
+};
+
+export const INITIAL_MODERATION_INCIDENTS: ModerationIncident[] = [
+  {
+    id: 'inc_01',
+    timestamp: '2026-08-30T15:32:15Z',
+    groupJid: '120363198273619283@g.us',
+    groupName: '💎 VIP Alpha Investidores #01',
+    memberPhone: '+55 81 99887-2211',
+    memberName: 'Lucas Sampaio (Lead)',
+    triggerType: 'link_blocker',
+    triggerDetail: 'Link proibido de convite Telegram detectado: t.me/sinais_gratuitos_vip',
+    originalMessage: 'Galera entrem no grupo vip gratuito de sinais aqui t.me/sinais_gratuitos_vip lucrando 500 reais por dia',
+    actionTaken: 'member_kicked',
+    strikeCount: 1,
+    maxStrikes: 1,
+    status: 'active',
+    canRevert: true
+  },
+  {
+    id: 'inc_02',
+    timestamp: '2026-08-30T15:18:40Z',
+    groupJid: '120363948372615243@g.us',
+    groupName: '🔥 Lançamento Black #01',
+    memberPhone: '+1 202 555-0192',
+    memberName: 'WhatsApp Bot US',
+    triggerType: 'foreign_prefix',
+    triggerDetail: 'Número estrangeiro não autorizado (+1) em grupo restrito a +55 (Brasil)',
+    originalMessage: 'Hello check my bio for cheap followers and crypto investment',
+    actionTaken: 'member_blacklisted',
+    strikeCount: 1,
+    maxStrikes: 1,
+    status: 'banned_permanently',
+    canRevert: false
+  },
+  {
+    id: 'inc_03',
+    timestamp: '2026-08-30T14:45:10Z',
+    groupJid: '120363198273619283@g.us',
+    groupName: '💎 VIP Alpha Investidores #01',
+    memberPhone: '+55 11 97766-4433',
+    memberName: 'Rodrigo M.',
+    triggerType: 'keyword_violation',
+    triggerDetail: 'Palavra-chave restrita de golpe detectada: "urubu do pix"',
+    originalMessage: 'Quem quer participar do urubu do pix manda 50 volta 500 no pix na hora',
+    actionTaken: 'member_kicked',
+    strikeCount: 1,
+    maxStrikes: 1,
+    status: 'banned_permanently',
+    canRevert: false
+  },
+  {
+    id: 'inc_04',
+    timestamp: '2026-08-30T13:20:00Z',
+    groupJid: '120363198273619299@g.us',
+    groupName: '💎 VIP Alpha Investidores #02',
+    memberPhone: '+55 47 98833-1122',
+    memberName: 'Gabriel Nunes',
+    triggerType: 'flood_spam',
+    triggerDetail: 'Flood: 5 mensagens idênticas enviadas em menos de 3 segundos',
+    originalMessage: 'VENDO CONTA COM 100K SEGUIDORES CHAMA NO PV',
+    actionTaken: 'member_warned',
+    strikeCount: 2,
+    maxStrikes: 3,
+    status: 'active',
+    canRevert: true
+  },
+  {
+    id: 'inc_05',
+    timestamp: '2026-08-30T11:05:22Z',
+    groupJid: '120363948372615299@g.us',
+    groupName: '🔥 Lançamento Black #02',
+    memberPhone: '+55 31 99122-3344',
+    memberName: 'Marcos Vinicius',
+    triggerType: 'link_blocker',
+    triggerDetail: 'Link encurtado não autorizado (bit.ly/desconto-maluco)',
+    originalMessage: 'Clica aqui no link pra ver a promoção bit.ly/desconto-maluco',
+    actionTaken: 'message_deleted',
+    strikeCount: 1,
+    maxStrikes: 3,
+    status: 'active',
+    canRevert: true
+  }
+];
+
+export const INITIAL_BLACKLISTED_MEMBERS: BlacklistedMember[] = [
+  {
+    id: 'blk_01',
+    phone: '+55 81 99887-2211',
+    name: 'Lucas Sampaio (Lead)',
+    reason: 'Divulgação recorrente de links de grupos concorrentes Telegram',
+    category: 'spammer',
+    blockedAt: '2026-08-30 15:32',
+    blockedBy: 'Auto-Moderação Baileys Shield',
+    autoKickOnJoin: true,
+    totalAttemptsBlocked: 4
+  },
+  {
+    id: 'blk_02',
+    phone: '+1 202 555-0192',
+    name: 'WhatsApp Bot US',
+    reason: 'Bot de spam internacional e phishing de cartões',
+    category: 'phishing',
+    blockedAt: '2026-08-30 15:18',
+    blockedBy: 'Filtro de DDI Estrangeiro',
+    autoKickOnJoin: true,
+    totalAttemptsBlocked: 12
+  },
+  {
+    id: 'blk_03',
+    phone: '+55 11 97766-4433',
+    name: 'Rodrigo M.',
+    reason: 'Tentativa de golpe de falso Pix no grupo VIP',
+    category: 'bad_actor',
+    blockedAt: '2026-08-30 14:45',
+    blockedBy: 'Filtro de Palavras-Chave',
+    autoKickOnJoin: true,
+    totalAttemptsBlocked: 2
+  }
+];
+

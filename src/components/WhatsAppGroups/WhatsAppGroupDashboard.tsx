@@ -41,7 +41,10 @@ import {
   HybridWhatsAppEngineStatus,
   BaileysQueueItem,
   BaileysGroupSyncStatus,
-  BaileysEventLog
+  BaileysEventLog,
+  AutoModerationConfig,
+  ModerationIncident,
+  BlacklistedMember
 } from '../../types';
 import { 
   INITIAL_WHATSAPP_GROUPS, 
@@ -50,13 +53,17 @@ import {
   INITIAL_HYBRID_ENGINE_STATUS,
   INITIAL_BAILEYS_QUEUE,
   INITIAL_BAILEYS_GROUP_STATUSES,
-  INITIAL_BAILEYS_LOGS
+  INITIAL_BAILEYS_LOGS,
+  INITIAL_MODERATION_CONFIG,
+  INITIAL_MODERATION_INCIDENTS,
+  INITIAL_BLACKLISTED_MEMBERS
 } from '../../data/whatsappGroupData';
 import { CreateGroupModal } from './CreateGroupModal';
 import { CreateSmartLinkModal } from './CreateSmartLinkModal';
 import { GroupBroadcastModal } from './GroupBroadcastModal';
 import { BaileysStatusMonitor } from './BaileysStatusMonitor';
 import { GroupGrowthAnalytics } from './GroupGrowthAnalytics';
+import { AutoModerationPanel } from './AutoModerationPanel';
 
 interface WhatsAppGroupDashboardProps {
   onOpenFlow?: (flowId: string) => void;
@@ -65,7 +72,7 @@ interface WhatsAppGroupDashboardProps {
 export const WhatsAppGroupDashboard: React.FC<WhatsAppGroupDashboardProps> = ({
   onOpenFlow
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'growth_analytics' | 'groups_list' | 'monetization' | 'smart_links' | 'broadcaster' | 'baileys_monitor' | 'engine_settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'auto_moderation' | 'growth_analytics' | 'groups_list' | 'monetization' | 'smart_links' | 'broadcaster' | 'baileys_monitor' | 'engine_settings'>('overview');
   
   // Data state
   const [groups, setGroups] = useState<WhatsAppGroup[]>(INITIAL_WHATSAPP_GROUPS);
@@ -74,6 +81,9 @@ export const WhatsAppGroupDashboard: React.FC<WhatsAppGroupDashboardProps> = ({
   const [baileysQueue, setBaileysQueue] = useState<BaileysQueueItem[]>(INITIAL_BAILEYS_QUEUE);
   const [baileysGroupStatuses, setBaileysGroupStatuses] = useState<BaileysGroupSyncStatus[]>(INITIAL_BAILEYS_GROUP_STATUSES);
   const [baileysLogs, setBaileysLogs] = useState<BaileysEventLog[]>(INITIAL_BAILEYS_LOGS);
+  const [moderationConfig, setModerationConfig] = useState<AutoModerationConfig>(INITIAL_MODERATION_CONFIG);
+  const [moderationIncidents, setModerationIncidents] = useState<ModerationIncident[]>(INITIAL_MODERATION_INCIDENTS);
+  const [blacklistedMembers, setBlacklistedMembers] = useState<BlacklistedMember[]>(INITIAL_BLACKLISTED_MEMBERS);
   const [broadcastTasks, setBroadcastTasks] = useState<GroupBroadcastTask[]>([
     {
       id: 'task_01',
@@ -226,6 +236,7 @@ export const WhatsAppGroupDashboard: React.FC<WhatsAppGroupDashboardProps> = ({
         <div className="max-w-7xl mx-auto flex items-center gap-1 mt-6 border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
           {[
             { id: 'overview', label: 'Visão Geral & Métricas', icon: TrendingUp },
+            { id: 'auto_moderation', label: 'Auto-Moderação & Anti-Spam', icon: ShieldCheck, badge: `${moderationIncidents.filter(i => i.status === 'active').length} alertas` },
             { id: 'growth_analytics', label: 'Gráficos de Crescimento & Retenção', icon: TrendingUp, badge: '+96.8%' },
             { id: 'groups_list', label: `Grupos Administrados (${groups.length})`, icon: Users },
             { id: 'baileys_monitor', label: 'Monitor Baileys API & Fila', icon: Zap, badge: `${baileysQueue.filter(q => q.status === 'queued' || q.status === 'sending').length} na fila` },
@@ -558,6 +569,42 @@ export const WhatsAppGroupDashboard: React.FC<WhatsAppGroupDashboardProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* TAB: AUTO MODERATION & ANTI-SPAM SHIELD */}
+        {activeTab === 'auto_moderation' && (
+          <AutoModerationPanel
+            config={moderationConfig}
+            incidents={moderationIncidents}
+            blacklist={blacklistedMembers}
+            groups={groups}
+            onUpdateConfig={(newCfg) => setModerationConfig(newCfg)}
+            onRevertIncident={(incId) => {
+              setModerationIncidents(prev => prev.map(inc => 
+                inc.id === incId ? { ...inc, status: 'reverted', canRevert: false } : inc
+              ));
+            }}
+            onBlacklistMember={(phone, name, reason) => {
+              setBlacklistedMembers(prev => [
+                {
+                  id: `blk_${Date.now()}`,
+                  phone,
+                  name,
+                  reason,
+                  category: 'manual',
+                  blockedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                  blockedBy: 'Operador Admin',
+                  autoKickOnJoin: true,
+                  totalAttemptsBlocked: 1
+                },
+                ...prev
+              ]);
+            }}
+            onRemoveBlacklist={(blkId) => {
+              setBlacklistedMembers(prev => prev.filter(b => b.id !== blkId));
+            }}
+            onTriggerToast={triggerToast}
+          />
         )}
 
         {/* TAB: GROWTH & RETENTION ANALYTICS */}
