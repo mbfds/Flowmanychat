@@ -189,6 +189,49 @@ export const FlowNodeCard: React.FC<FlowNodeCardProps> = ({
         {/* Message Node Body */}
         {node.type === 'message' && (
           <div className="space-y-2.5">
+            {node.data.isMessageABTestEnabled && (
+              <div className="p-2 rounded-lg bg-gradient-to-r from-fuchsia-50 to-purple-50 border border-fuchsia-200/80 space-y-1.5 shadow-2xs">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="font-bold text-fuchsia-900 flex items-center gap-1">
+                    <Split className="w-3 h-3 text-fuchsia-600" />
+                    <span>Teste A/B Ativo</span>
+                  </span>
+                  <span className="text-[10px] font-extrabold text-fuchsia-700 bg-white/80 px-1.5 py-0.5 rounded border border-fuchsia-200">
+                    {node.data.messageVariants?.length || 2} Variações
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1 text-[10px] font-bold">
+                  {node.data.messageVariants && node.data.messageVariants.length > 0 ? (
+                    node.data.messageVariants.map((v, i) => (
+                      <div
+                        key={v.id}
+                        className={`flex-1 py-1 px-1.5 rounded text-center truncate ${
+                          i === 0
+                            ? 'bg-blue-100 text-blue-900 border border-blue-200'
+                            : i === 1
+                            ? 'bg-fuchsia-100 text-fuchsia-900 border border-fuchsia-200'
+                            : 'bg-purple-100 text-purple-900 border border-purple-200'
+                        }`}
+                      >
+                        <span className="opacity-75">{v.name.slice(0, 10)}:</span>{' '}
+                        <span>{v.trafficPercent}%</span>
+                      </div>
+                    ))
+                  ) : (
+                    <>
+                      <div className="flex-1 py-1 px-1.5 rounded text-center bg-blue-100 text-blue-900 border border-blue-200">
+                        Var A: 50%
+                      </div>
+                      <div className="flex-1 py-1 px-1.5 rounded text-center bg-fuchsia-100 text-fuchsia-900 border border-fuchsia-200">
+                        Var B: 50%
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="p-2.5 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] text-xs text-[#1A1D21] leading-relaxed font-sans line-clamp-3">
               {node.data.text ? (
                 node.data.text.split(/({[a-zA-Z_]+})/).map((part, idx) =>

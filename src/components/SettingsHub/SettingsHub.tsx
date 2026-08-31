@@ -36,7 +36,14 @@ import { DomainManager } from './DomainManager';
 import { ProductionDeployHub } from './ProductionDeployHub';
 import { TeamUserManager } from './TeamUserManager';
 import { FacebookAppsManager } from './FacebookAppsManager';
-import { Users } from 'lucide-react';
+import { ActivityLogsViewer } from './ActivityLogsViewer';
+import { WebhookSubscriptions } from './WebhookSubscriptions';
+import { MasterSecurityManager } from './MasterSecurityManager';
+import { ExternalMessageWebhooksManager } from './ExternalMessageWebhooksManager';
+import { WebhookSignatureTool } from './WebhookSignatureTool';
+import { WebhookRetryPolicyManager } from './WebhookRetryPolicyManager';
+import { FacebookGraphApiManager } from './FacebookGraphApiManager';
+import { Users, FileText, KeyRound, RotateCcw } from 'lucide-react';
 
 interface SettingsHubProps {
   knowledgeBase: BotKnowledgeBase;
@@ -59,7 +66,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   onOpenFlow,
   onOpenLiveChat
 }) => {
-  const [activeTab, setActiveTab] = useState<'production' | 'fb_apps' | 'domains' | 'team' | 'rate_limits' | 'webhook_logs' | 'webhooks' | 'custom_fields' | 'database' | 'meta_ai'>('fb_apps');
+  const [activeTab, setActiveTab] = useState<'master_security' | 'facebook_graph' | 'webhook_retries' | 'webhook_signatures' | 'external_message_webhooks' | 'activity_logs' | 'webhook_subscriptions' | 'production' | 'fb_apps' | 'domains' | 'team' | 'rate_limits' | 'webhook_logs' | 'webhooks' | 'custom_fields' | 'database' | 'meta_ai'>('facebook_graph');
   const [formData, setFormData] = useState<BotKnowledgeBase>(knowledgeBase);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -96,6 +103,119 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
 
       {/* Tabs Navigation */}
       <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-1 overflow-x-auto">
+        <button
+          id="tab_settings_master_security"
+          onClick={() => setActiveTab('master_security')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'master_security'
+              ? 'border-amber-500 text-amber-900 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/40 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <KeyRound className="w-4 h-4 text-amber-500" />
+          <span>Segurança Master & Senha Central</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+            Root Admin
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_facebook_graph"
+          onClick={() => setActiveTab('facebook_graph')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'facebook_graph'
+              ? 'border-blue-600 text-blue-900 dark:text-blue-200 bg-blue-50/80 dark:bg-blue-950/40 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Facebook className="w-4 h-4 text-blue-600" />
+          <span>Facebook Graph API (Páginas & Tokens)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-900 border border-blue-300">
+            v21.0 Oficial
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_webhook_retries"
+          onClick={() => setActiveTab('webhook_retries')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'webhook_retries'
+              ? 'border-indigo-600 text-indigo-900 dark:text-indigo-200 bg-indigo-50/80 dark:bg-indigo-950/40 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <RotateCcw className="w-4 h-4 text-indigo-600" />
+          <span>Políticas de Retry (Backoff & DLQ)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-300">
+            Resiliência
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_webhook_signatures"
+          onClick={() => setActiveTab('webhook_signatures')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'webhook_signatures'
+              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/70 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <span>Assinatura & Secret (Validação HMAC)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
+            Genuinidade
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_external_message_webhooks"
+          onClick={() => setActiveTab('external_message_webhooks')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'external_message_webhooks'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Radio className="w-4 h-4 text-blue-600 animate-pulse" />
+          <span>Webhooks & Callbacks Externos</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-900 border border-blue-200">
+            Recepção de Mensagens
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_activity_logs"
+          onClick={() => setActiveTab('activity_logs')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'activity_logs'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-lg'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-blue-600" />
+          <span>Logs de Atividade (Auditoria)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Audit Trail
+          </span>
+        </button>
+
+        <button
+          id="tab_settings_webhook_subscriptions"
+          onClick={() => setActiveTab('webhook_subscriptions')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'webhook_subscriptions'
+              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50 rounded-t-lg'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Webhook className="w-4 h-4 text-indigo-600" />
+          <span>Subscrições de Webhook</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-900">
+            Event-Driven
+          </span>
+        </button>
+
         <button
           id="tab_settings_fb_apps"
           onClick={() => setActiveTab('fb_apps')}
@@ -249,6 +369,41 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           <span>Conexões Meta & IA</span>
         </button>
       </div>
+
+      {/* Tab: MASTER SECURITY MANAGER (ROOT ACCESS & LOCKDOWN) */}
+      {activeTab === 'master_security' && (
+        <MasterSecurityManager />
+      )}
+
+      {/* Tab: FACEBOOK GRAPH API & PAGE LINKING (SCOPES & LONG-LIVED TOKENS) */}
+      {activeTab === 'facebook_graph' && (
+        <FacebookGraphApiManager />
+      )}
+
+      {/* Tab: WEBHOOK SIGNATURE & SECRET TOOL (HMAC VALIDATION & GENUINE CHECK) */}
+      {activeTab === 'webhook_signatures' && (
+        <WebhookSignatureTool />
+      )}
+
+      {/* Tab: WEBHOOK RETRY POLICIES & EXPONENTIAL BACKOFF */}
+      {activeTab === 'webhook_retries' && (
+        <WebhookRetryPolicyManager />
+      )}
+
+      {/* Tab: EXTERNAL MESSAGE WEBHOOKS & AUTHENTICATION CALLBACKS */}
+      {activeTab === 'external_message_webhooks' && (
+        <ExternalMessageWebhooksManager />
+      )}
+
+      {/* Tab: ACTIVITY AUDIT LOGS (AUDIT TRAIL) */}
+      {activeTab === 'activity_logs' && (
+        <ActivityLogsViewer />
+      )}
+
+      {/* Tab: WEBHOOK SUBSCRIPTIONS (EVENT-DRIVEN DISPATCH) */}
+      {activeTab === 'webhook_subscriptions' && (
+        <WebhookSubscriptions />
+      )}
 
       {/* Tab: MULTI-APP FACEBOOK / META DEVELOPER APPS */}
       {activeTab === 'fb_apps' && (

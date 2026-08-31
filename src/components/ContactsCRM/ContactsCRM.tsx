@@ -27,9 +27,15 @@ import {
   Sliders,
   ArrowUpDown,
   TrendingUp,
-  HelpCircle
+  HelpCircle,
+  CheckSquare,
+  Square,
+  Sparkles,
+  GitFork,
+  Check
 } from 'lucide-react';
-import { Contact, LeadScoreTier } from '../../types';
+import confetti from 'canvas-confetti';
+import { Contact, Flow, ContactNote, ContactActivityLog, LeadScoreTier } from '../../types';
 import { ContactDetailsDrawer } from './ContactDetailsDrawer';
 import { 
   calculateLeadScore, 
@@ -39,9 +45,15 @@ import {
 } from '../../utils/leadScoring';
 import { LeadScoreBreakdownModal } from './LeadScoreBreakdownModal';
 import { LeadScoringRulesModal } from './LeadScoringRulesModal';
+import { BulkActionsToolbar } from './BulkActionsToolbar';
+import { BulkAssignFlowModal } from './BulkAssignFlowModal';
+import { BulkTagModal } from './BulkTagModal';
+import { BulkAddNoteModal } from './BulkAddNoteModal';
+import { BulkStatusScoreModal } from './BulkStatusScoreModal';
 
 interface ContactsCRMProps {
   contacts: Contact[];
+  flows?: Flow[];
   onUpdateContacts: (contacts: Contact[]) => void;
   onOpenChat?: (contact: Contact) => void;
   onOpenBroadcast?: () => void;
@@ -49,6 +61,7 @@ interface ContactsCRMProps {
 
 export const ContactsCRM: React.FC<ContactsCRMProps> = ({
   contacts,
+  flows = [],
   onUpdateContacts,
   onOpenChat,
   onOpenBroadcast
@@ -69,6 +82,21 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
   });
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [contactForScoreBreakdown, setContactForScoreBreakdown] = useState<Contact | null>(null);
+
+  // Bulk selection and modal states
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isAssignFlowModalOpen, setIsAssignFlowModalOpen] = useState(false);
+  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
+  const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
+  const [isStatusScoreModalOpen, setIsStatusScoreModalOpen] = useState(false);
+  const [feedbackToast, setFeedbackToast] = useState<{ message: string; type: 'success' | 'info' | 'warning' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'info' | 'warning' = 'success') => {
+    setFeedbackToast({ message, type });
+    setTimeout(() => {
+      setFeedbackToast(null);
+    }, 4000);
+  };
 
   const handleSaveRules = (newRules: ScoringRuleConfig) => {
     setScoringRules(newRules);
@@ -106,67 +134,6 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
     return { all: contactsWithScore.length, hot, warm, cold };
   }, [contactsWithScore]);
 
-  const handleExportCSV = () => {
-    const headers = [
-      'ID', 
-      'Nome', 
-      'Username', 
-      'Canal', 
-      'Lead Score (Pontos)', 
-      'Classificação (Temperatura)', 
-      'Email', 
-      'Telefone', 
-      'Tags', 
-      'Total Logs Atividade', 
-      'Última Ação Bot', 
-      'Notas Internas', 
-      'Última Interação'
-    ];
-    const rows = contactsWithScore.map((c) => {
-      const notesText = (c.internalNotes || []).map((n) => `[${n.author}: ${n.content}]`).join(' | ');
-      const latestActivity = c.activityLogs?.[0]?.title || 'Sem atividade recente';
-      const tierLabel = c.scoreTier === 'hot' ? 'Quente' : c.scoreTier === 'warm' ? 'Morno' : 'Frio';
-      return [
-        c.id,
-        `"${c.name}"`,
-        `"${c.username}"`,
-        c.channel,
-        c.leadScore,
-        `"${tierLabel}"`,
-        `"${c.email || ''}"`,
-        `"${c.phone || ''}"`,
-        `"${c.tags.join(', ')}"`,
-        c.activityLogs?.length || 0,
-        `"${latestActivity}"`,
-        `"${notesText}"`,
-        `"${c.lastInteractionAt}"`
-      ];
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `leads_manyflow_scoring_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
-
-  const handleUpdateSingleContact = (updatedContact: Contact) => {
-    const updatedList = contacts.map((c) => (c.id === updatedContact.id ? updatedContact : c));
-    onUpdateContacts(updatedList);
-    setSelectedContact(updatedContact);
-    if (contactForScoreBreakdown?.id === updatedContact.id) {
-      setContactForScoreBreakdown(updatedContact);
-    }
-  };
-
-  const openDrawerWithTab = (contact: Contact, tab: 'scoring' | 'activity' | 'notes' | 'details' | 'custom_fields') => {
-    setDrawerInitialTab(tab);
-    setSelectedContact(contact);
-  };
-
   const filteredAndSortedContacts = useMemo(() => {
     const list = contactsWithScore.filter((c) => {
       const matchesSearch =
@@ -201,8 +168,383 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
     });
   }, [contactsWithScore, searchTerm, selectedTag, selectedChannel, temperatureFilter, sortBy]);
 
+  // Selected Contacts List
+  const selectedContacts = useMemo(() => {
+    return contacts.filter((c) => selectedIds.has(c.id));
+  }, [contacts, selectedIds]);
+
+  const isAllFilteredSelected = filteredAndSortedContacts.length > 0 && 
+    filteredAndSortedContacts.every((c) => selectedIds.has(c.id));
+
+  // Selection handlers
+  const handleToggleSelectContact = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFiltered = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      filteredAndSortedContacts.forEach((c) => next.add(c.id));
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleToggleSelectAllInHeader = () => {
+    if (isAllFilteredSelected) {
+      // Unselect all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredAndSortedContacts.forEach((c) => next.delete(c.id));
+        return next;
+      });
+    } else {
+      // Select all filtered
+      handleSelectAllFiltered();
+    }
+  };
+
+  // Bulk Operations Handlers
+  const handleBulkAssignFlow = (flowId: string, executeImmediately: boolean) => {
+    const targetFlow = flows.find((f) => f.id === flowId);
+    const flowName = targetFlow?.name || 'Automação Personalizada';
+    const now = new Date().toISOString();
+
+    const updated = contacts.map((c) => {
+      if (!selectedIds.has(c.id)) return c;
+
+      const newLog: ContactActivityLog = {
+        id: `act_bulk_flow_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        type: 'flow_triggered',
+        title: `Atribuído ao Fluxo "${flowName}" (Ação em Massa)`,
+        description: executeImmediately
+          ? `Fluxo disparado com envio automático de mensagens para o contato no canal ${c.channel}.`
+          : `Contato vinculado ao fluxo de automação no CRM.`,
+        timestamp: now,
+        actor: 'agent',
+        flowId: flowId,
+        flowTitle: flowName
+      };
+
+      return {
+        ...c,
+        activityLogs: [newLog, ...(c.activityLogs || [])],
+        lastInteractionAt: executeImmediately ? now : c.lastInteractionAt,
+        totalInteractions: executeImmediately ? (c.totalInteractions || 0) + 1 : c.totalInteractions
+      };
+    });
+
+    onUpdateContacts(updated);
+    showToast(`${selectedIds.size} ${selectedIds.size === 1 ? 'contato atribuído' : 'contatos atribuídos'} ao fluxo "${flowName}" com sucesso!`, 'success');
+    confetti({ particleCount: 40, spread: 50, origin: { y: 0.6 } });
+    handleClearSelection();
+  };
+
+  const handleBulkApplyTags = (tagsToAdd: string[], tagsToRemove: string[]) => {
+    const now = new Date().toISOString();
+
+    const updated = contacts.map((c) => {
+      if (!selectedIds.has(c.id)) return c;
+
+      let nextTags = [...c.tags];
+
+      // Add tags
+      tagsToAdd.forEach((t) => {
+        if (!nextTags.includes(t)) {
+          nextTags.push(t);
+        }
+      });
+
+      // Remove tags
+      if (tagsToRemove.length > 0) {
+        nextTags = nextTags.filter((t) => !tagsToRemove.includes(t));
+      }
+
+      const logs: ContactActivityLog[] = [];
+      if (tagsToAdd.length > 0) {
+        logs.push({
+          id: `act_tag_add_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          type: 'tag_added',
+          title: `Tags Adicionadas em Massa: ${tagsToAdd.join(', ')}`,
+          description: `Segmentação atualizada em lote via CRM`,
+          timestamp: now,
+          actor: 'agent'
+        });
+      }
+      if (tagsToRemove.length > 0) {
+        logs.push({
+          id: `act_tag_rem_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          type: 'tag_removed',
+          title: `Tags Removidas em Massa: ${tagsToRemove.join(', ')}`,
+          description: `Segmentação atualizada em lote via CRM`,
+          timestamp: now,
+          actor: 'agent'
+        });
+      }
+
+      return {
+        ...c,
+        tags: nextTags,
+        activityLogs: [...logs, ...(c.activityLogs || [])]
+      };
+    });
+
+    onUpdateContacts(updated);
+    showToast(`Tags atualizadas com sucesso para ${selectedIds.size} contatos!`, 'success');
+    handleClearSelection();
+  };
+
+  const handleBulkAddNote = (noteData: Omit<ContactNote, 'id' | 'createdAt'>) => {
+    const now = new Date().toISOString();
+
+    const updated = contacts.map((c) => {
+      if (!selectedIds.has(c.id)) return c;
+
+      const newNote: ContactNote = {
+        id: `note_bulk_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        ...noteData,
+        createdAt: now
+      };
+
+      const newLog: ContactActivityLog = {
+        id: `act_note_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        type: 'note_added',
+        title: `Nota Interna em Lote Adicionada (${noteData.author})`,
+        description: `"${noteData.content}"`,
+        timestamp: now,
+        actor: 'agent'
+      };
+
+      return {
+        ...c,
+        internalNotes: [newNote, ...(c.internalNotes || [])],
+        activityLogs: [newLog, ...(c.activityLogs || [])]
+      };
+    });
+
+    onUpdateContacts(updated);
+    showToast(`Nota interna adicionada a ${selectedIds.size} contatos!`, 'success');
+    handleClearSelection();
+  };
+
+  const handleBulkStatusScore = (changes: {
+    status?: 'active' | 'bot_paused' | 'human_assigned' | 'unsubscribed';
+    scoreBonus?: number;
+    assignedAgent?: string;
+  }) => {
+    const now = new Date().toISOString();
+
+    const updated = contacts.map((c) => {
+      if (!selectedIds.has(c.id)) return c;
+
+      const nextContact = { ...c };
+      const logs: ContactActivityLog[] = [];
+
+      if (changes.status) {
+        nextContact.status = changes.status;
+        if (changes.status === 'human_assigned') {
+          nextContact.assignedAgent = changes.assignedAgent || 'Lucas Santos';
+        }
+        logs.push({
+          id: `act_status_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          type: 'status_changed',
+          title: `Status do Lead alterado para "${changes.status}" (Em Massa)`,
+          description: `Atualização de status executada via CRM`,
+          timestamp: now,
+          actor: 'agent'
+        });
+      }
+
+      if (changes.scoreBonus !== undefined && changes.scoreBonus !== 0) {
+        const currentBonus = nextContact.manualScoreBonus || 0;
+        nextContact.manualScoreBonus = currentBonus + changes.scoreBonus;
+        logs.push({
+          id: `act_score_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+          type: 'custom_field_updated',
+          title: `Bônus de Lead Scoring em Massa: ${changes.scoreBonus > 0 ? `+${changes.scoreBonus}` : changes.scoreBonus} pts`,
+          description: `Pontuação creditada manualmente pelo operador`,
+          timestamp: now,
+          actor: 'agent'
+        });
+      }
+
+      nextContact.activityLogs = [...logs, ...(nextContact.activityLogs || [])];
+      return nextContact;
+    });
+
+    onUpdateContacts(updated);
+    showToast(`Status e pontuação atualizados com sucesso para ${selectedIds.size} contatos!`, 'success');
+    handleClearSelection();
+  };
+
+  const handleBulkDelete = () => {
+    const count = selectedIds.size;
+    const remaining = contacts.filter((c) => !selectedIds.has(c.id));
+    onUpdateContacts(remaining);
+    showToast(`${count} ${count === 1 ? 'contato removido' : 'contatos removidos'} do CRM.`, 'info');
+    handleClearSelection();
+  };
+
+  const handleExportSelectedCSV = () => {
+    const targetContacts = contactsWithScore.filter((c) => selectedIds.has(c.id));
+    if (targetContacts.length === 0) return;
+
+    const headers = [
+      'ID', 
+      'Nome', 
+      'Username', 
+      'Canal', 
+      'Status Bot',
+      'Lead Score (Pontos)', 
+      'Classificação (Temperatura)', 
+      'Email', 
+      'Telefone', 
+      'Tags', 
+      'Total Logs Atividade', 
+      'Última Ação Bot', 
+      'Notas Internas', 
+      'Última Interação'
+    ];
+    const rows = targetContacts.map((c) => {
+      const notesText = (c.internalNotes || []).map((n) => `[${n.author}: ${n.content}]`).join(' | ');
+      const latestActivity = c.activityLogs?.[0]?.title || 'Sem atividade recente';
+      const tierLabel = c.scoreTier === 'hot' ? 'Quente' : c.scoreTier === 'warm' ? 'Morno' : 'Frio';
+      return [
+        c.id,
+        `"${c.name}"`,
+        `"${c.username}"`,
+        c.channel,
+        c.status,
+        c.leadScore,
+        `"${tierLabel}"`,
+        `"${c.email || ''}"`,
+        `"${c.phone || ''}"`,
+        `"${c.tags.join(', ')}"`,
+        c.activityLogs?.length || 0,
+        `"${latestActivity}"`,
+        `"${notesText}"`,
+        `"${c.lastInteractionAt}"`
+      ];
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `leads_selecionados_${targetContacts.length}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast(`${targetContacts.length} contatos exportados em CSV com sucesso!`, 'success');
+  };
+
+  const handleExportSelectedJSON = () => {
+    const targetContacts = contactsWithScore.filter((c) => selectedIds.has(c.id));
+    if (targetContacts.length === 0) return;
+
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(targetContacts, null, 2));
+    const link = document.createElement('a');
+    link.setAttribute('href', dataStr);
+    link.setAttribute('download', `leads_selecionados_${targetContacts.length}_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    showToast(`${targetContacts.length} contatos exportados em formato JSON!`, 'success');
+  };
+
+  const handleExportAllCSV = () => {
+    const headers = [
+      'ID', 
+      'Nome', 
+      'Username', 
+      'Canal', 
+      'Status Bot',
+      'Lead Score (Pontos)', 
+      'Classificação (Temperatura)', 
+      'Email', 
+      'Telefone', 
+      'Tags', 
+      'Total Logs Atividade', 
+      'Última Ação Bot', 
+      'Notas Internas', 
+      'Última Interação'
+    ];
+    const rows = contactsWithScore.map((c) => {
+      const notesText = (c.internalNotes || []).map((n) => `[${n.author}: ${n.content}]`).join(' | ');
+      const latestActivity = c.activityLogs?.[0]?.title || 'Sem atividade recente';
+      const tierLabel = c.scoreTier === 'hot' ? 'Quente' : c.scoreTier === 'warm' ? 'Morno' : 'Frio';
+      return [
+        c.id,
+        `"${c.name}"`,
+        `"${c.username}"`,
+        c.channel,
+        c.status,
+        c.leadScore,
+        `"${tierLabel}"`,
+        `"${c.email || ''}"`,
+        `"${c.phone || ''}"`,
+        `"${c.tags.join(', ')}"`,
+        c.activityLogs?.length || 0,
+        `"${latestActivity}"`,
+        `"${notesText}"`,
+        `"${c.lastInteractionAt}"`
+      ];
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `todos_leads_manyflow_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleUpdateSingleContact = (updatedContact: Contact) => {
+    const updatedList = contacts.map((c) => (c.id === updatedContact.id ? updatedContact : c));
+    onUpdateContacts(updatedList);
+    setSelectedContact(updatedContact);
+    if (contactForScoreBreakdown?.id === updatedContact.id) {
+      setContactForScoreBreakdown(updatedContact);
+    }
+  };
+
+  const openDrawerWithTab = (contact: Contact, tab: 'scoring' | 'activity' | 'notes' | 'details' | 'custom_fields') => {
+    setDrawerInitialTab(tab);
+    setSelectedContact(contact);
+  };
+
   return (
     <div id="contacts_crm_view" className="flex-1 flex flex-col h-full bg-[#F8F9FB] p-6 lg:p-8 overflow-y-auto select-none space-y-6">
+      {/* Toast Notification */}
+      {feedbackToast && (
+        <div className="fixed bottom-6 right-6 z-50 p-4 rounded-2xl bg-[#1A1D21] text-white shadow-2xl border border-gray-700 flex items-center gap-3 animate-in slide-in-from-bottom duration-200">
+          <div className="p-1.5 rounded-xl bg-emerald-500/20 text-emerald-400">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <span className="text-xs font-semibold">{feedbackToast.message}</span>
+          <button 
+            onClick={() => setFeedbackToast(null)}
+            className="text-gray-400 hover:text-white cursor-pointer ml-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -217,7 +559,7 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-0.5">
-            Pontuação automática por interações, cliques em botões, respostas a stories e histórico de conversão.
+            Gerencie múltiplos leads, execute ações em lote, tags, notas internas e atribuição automática a fluxos.
           </p>
         </div>
 
@@ -245,11 +587,11 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
 
           <button
             id="btn_export_leads_csv"
-            onClick={handleExportCSV}
+            onClick={handleExportAllCSV}
             className="py-2 px-4 rounded-lg bg-white hover:bg-gray-50 border border-[#E2E8F0] text-[#1A1D21] text-xs font-semibold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
           >
             <Download className="w-4 h-4 text-[#64748B]" />
-            <span>Exportar CSV</span>
+            <span>Exportar Tudo</span>
           </button>
         </div>
       </div>
@@ -398,12 +740,48 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
         </div>
       </div>
 
+      {/* Bulk Actions Sticky Toolbar */}
+      <BulkActionsToolbar
+        selectedContactsCount={selectedIds.size}
+        totalFilteredCount={filteredAndSortedContacts.length}
+        totalContactsCount={contacts.length}
+        onClearSelection={handleClearSelection}
+        onSelectAllFiltered={handleSelectAllFiltered}
+        isAllFilteredSelected={isAllFilteredSelected}
+        onOpenAssignFlow={() => setIsAssignFlowModalOpen(true)}
+        onOpenManageTags={() => setIsTagModalOpen(true)}
+        onOpenAddNote={() => setIsAddNoteModalOpen(true)}
+        onOpenStatusScore={() => setIsStatusScoreModalOpen(true)}
+        onExportSelectedCSV={handleExportSelectedCSV}
+        onExportSelectedJSON={handleExportSelectedJSON}
+        onDeleteSelected={handleBulkDelete}
+      />
+
       {/* Contacts Table */}
       <div className="rounded-xl bg-white border border-[#E2E8F0] shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="bg-[#F8F9FB] border-b border-[#E2E8F0] text-[#64748B] font-semibold uppercase tracking-wider text-[10px]">
+                {/* Select All Checkbox */}
+                <th className="py-3 px-4 w-10">
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAllInHeader}
+                    className="p-1 rounded text-gray-500 hover:text-[#0084FF] transition-colors cursor-pointer"
+                    title={isAllFilteredSelected ? 'Desmarcar todos' : 'Selecionar todos os leads filtrados'}
+                  >
+                    {isAllFilteredSelected ? (
+                      <CheckSquare className="w-4 h-4 text-[#0084FF]" />
+                    ) : selectedIds.size > 0 ? (
+                      <div className="w-4 h-4 rounded bg-[#0084FF] text-white flex items-center justify-center font-bold text-[9px]">
+                        -
+                      </div>
+                    ) : (
+                      <Square className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+                </th>
                 <th className="py-3 px-4">Contato</th>
                 <th className="py-3 px-4">Lead Score 🔥</th>
                 <th className="py-3 px-4">Canal</th>
@@ -417,7 +795,7 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
             <tbody className="divide-y divide-gray-100 text-[#1A1D21]">
               {filteredAndSortedContacts.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-[#64748B]">
+                  <td colSpan={9} className="py-10 text-center text-[#64748B]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Users className="w-8 h-8 text-gray-300" />
                       <p className="text-xs font-semibold">Nenhum lead encontrado com os filtros selecionados.</p>
@@ -437,6 +815,7 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
                 </tr>
               ) : (
                 filteredAndSortedContacts.map((contact) => {
+                  const isSelected = selectedIds.has(contact.id);
                   const notesCount = contact.internalNotes?.length || 0;
                   const logsCount = contact.activityLogs?.length || 0;
                   const latestLog = contact.activityLogs?.[0];
@@ -446,8 +825,27 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
                     <tr 
                       key={contact.id} 
                       onClick={() => openDrawerWithTab(contact, 'scoring')}
-                      className="hover:bg-gray-50/90 transition-colors cursor-pointer group"
+                      className={`transition-colors cursor-pointer group ${
+                        isSelected 
+                          ? 'bg-blue-50/70 hover:bg-blue-50' 
+                          : 'hover:bg-gray-50/90'
+                      }`}
                     >
+                      {/* Individual Checkbox */}
+                      <td className="py-3.5 px-4 w-10" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleSelectContact(contact.id, e)}
+                          className="p-1 rounded text-gray-400 hover:text-[#0084FF] transition-colors cursor-pointer"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="w-4 h-4 text-[#0084FF]" />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-300 group-hover:text-gray-400" />
+                          )}
+                        </button>
+                      </td>
+
                       {/* Contact Profile */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
@@ -619,6 +1017,37 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
         </div>
       </div>
 
+      {/* Bulk Operations Modals */}
+      <BulkAssignFlowModal
+        isOpen={isAssignFlowModalOpen}
+        onClose={() => setIsAssignFlowModalOpen(false)}
+        selectedContacts={selectedContacts}
+        flows={flows}
+        onAssignFlow={handleBulkAssignFlow}
+      />
+
+      <BulkTagModal
+        isOpen={isTagModalOpen}
+        onClose={() => setIsTagModalOpen(false)}
+        selectedContacts={selectedContacts}
+        availableTags={allTags}
+        onApplyTags={handleBulkApplyTags}
+      />
+
+      <BulkAddNoteModal
+        isOpen={isAddNoteModalOpen}
+        onClose={() => setIsAddNoteModalOpen(false)}
+        selectedContacts={selectedContacts}
+        onAddNote={handleBulkAddNote}
+      />
+
+      <BulkStatusScoreModal
+        isOpen={isStatusScoreModalOpen}
+        onClose={() => setIsStatusScoreModalOpen(false)}
+        selectedContacts={selectedContacts}
+        onApplyChanges={handleBulkStatusScore}
+      />
+
       {/* Contact Details & Activity Drawer */}
       {selectedContact && (
         <ContactDetailsDrawer
@@ -656,4 +1085,5 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
     </div>
   );
 };
+
 

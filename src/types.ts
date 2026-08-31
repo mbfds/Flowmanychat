@@ -37,6 +37,18 @@ export interface ABVariantStats {
   conversionRate: number;
 }
 
+export interface MessageVariant {
+  id: string; // 'variant_a', 'variant_b', 'variant_c'
+  name: string; // 'Variante A (Original)', 'Variante B (Copy Curto & Emoji)'
+  text: string;
+  mediaType?: 'text' | 'image' | 'carousel' | 'audio' | 'video';
+  mediaUrl?: string;
+  buttons?: FlowButton[];
+  quickReplies?: QuickReply[];
+  trafficPercent: number; // e.g. 50
+  stats?: ABVariantStats;
+}
+
 export interface FlowNodeData {
   text?: string;
   mediaType?: 'text' | 'image' | 'carousel' | 'audio' | 'video';
@@ -70,6 +82,13 @@ export interface FlowNodeData {
   commentTriggerMode?: 'keywords_only' | 'any_comment';
   commentAutoLike?: boolean;
   commentPublicReplies?: string[];
+  
+  // In-Node Message A/B Testing
+  isMessageABTestEnabled?: boolean;
+  messageVariants?: MessageVariant[];
+  messageTestGoal?: 'ctr' | 'lead_tag' | 'purchase' | 'response' | 'human_handover';
+  messageTestGoalTag?: string;
+  messageActiveVariantPreview?: string; // 'variant_a' | 'variant_b'
   
   // AI Step properties
   aiPrompt?: string;
@@ -106,6 +125,7 @@ export interface FlowNode {
 }
 
 export interface FlowConnection {
+  id?: string;
   fromNodeId: string;
   toNodeId: string;
   handleType?: 'default' | 'button' | 'quick_reply' | 'true' | 'false' | 'variant_a' | 'variant_b';
@@ -917,6 +937,92 @@ export interface FacebookApp {
   lastCheckedAt?: string;
 }
 
+// ============================================================================
+// --- FACEBOOK GRAPH API & PAGE LINKING TYPES ---
+// ============================================================================
+
+export type FacebookGraphApiTokenType = 'PAGE_ACCESS_TOKEN' | 'USER_ACCESS_TOKEN' | 'SYSTEM_USER' | 'APP_ACCESS_TOKEN';
+
+export interface FacebookGraphTokenDebugResult {
+  isValid: boolean;
+  tokenType: FacebookGraphApiTokenType;
+  appId: string;
+  applicationName?: string;
+  userId?: string;
+  userName?: string;
+  pageId?: string;
+  pageName?: string;
+  expiresAt: string | 'never';
+  isPermanent: boolean;
+  issuedAt?: string;
+  dataAccessExpiresAt?: string;
+  scopes: string[];
+  granularScopes?: { scope: string; targetIds?: string[] }[];
+  profileId?: string;
+  error?: string;
+}
+
+export interface FacebookPageLinkItem {
+  id: string; // Facebook Page ID e.g. "10982348192"
+  name: string; // e.g. "ManyFlow Brasil - Atendimento & Vendas"
+  category: string; // e.g. "Software / Marketing Digital"
+  avatarUrl: string;
+  followersCount: number;
+  appId: string; // Associated Meta App ID
+  pageAccessToken: string; // Long-lived / permanent page token
+  tokenExpiresAt: string | 'never';
+  isTokenPermanent: boolean;
+  instagramBusinessId?: string;
+  instagramUsername?: string; // e.g. "@manyflow.oficial"
+  instagramAvatarUrl?: string;
+  instagramFollowersCount?: number;
+  isWebhookSubscribed: boolean;
+  subscribedFields: string[]; // e.g. ['messages', 'messaging_postbacks', 'message_deliveries', 'message_reads', 'message_reactions', 'feed']
+  tasks: string[]; // e.g. ['MANAGE', 'MESSAGING', 'ANALYZE']
+  status: 'connected' | 'token_expired' | 'webhook_pending' | 'restricted';
+  tenantId?: string;
+  linkedAt: string;
+  lastSyncAt: string;
+  lastTestResult?: {
+    success: boolean;
+    latencyMs: number;
+    statusCode: number;
+    testedAt: string;
+    message: string;
+  };
+}
+
+export interface FacebookGraphPermissionDef {
+  scope: string;
+  name: string;
+  category: 'messaging' | 'instagram' | 'pages' | 'business' | 'advanced';
+  description: string;
+  featureImpact: string;
+  requiredFor: string[];
+  isEssential: boolean;
+  requiresAppReview: boolean;
+  status: 'granted' | 'missing' | 'pending_review' | 'not_requested';
+}
+
+export interface FacebookLongLivedTokenExchangeRequest {
+  appId: string;
+  appSecret: string;
+  shortLivedUserToken: string;
+  pageId?: string;
+}
+
+export interface FacebookLongLivedTokenExchangeResponse {
+  success: boolean;
+  longLivedUserToken?: string;
+  userTokenExpiresInSeconds?: number;
+  userTokenExpiresAt?: string;
+  pageAccessToken?: string;
+  isPageTokenPermanent?: boolean;
+  tokenType: FacebookGraphApiTokenType;
+  scopes?: string[];
+  error?: string;
+}
+
 // Production Readiness Checklist & Deployment Config Types
 export interface ProductionAuditItem {
   id: string;
@@ -1257,6 +1363,305 @@ export interface BlacklistedMember {
   autoKickOnJoin: boolean;
   totalAttemptsBlocked: number;
 }
+
+// ============================================================================
+// --- ACTIVITY LOGS (AUDIT TRAIL) TYPES ---
+// ============================================================================
+
+export type ActivityLogCategory = 'flow' | 'broadcast' | 'webhook' | 'team' | 'meta_app' | 'settings' | 'contacts' | 'ai_agent' | 'auth';
+export type ActivityLogStatus = 'success' | 'warning' | 'error' | 'info';
+
+export interface ActivityLog {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userAvatar?: string;
+  userRole?: string;
+  tenantId: string;
+  category: ActivityLogCategory;
+  action: string; // e.g. "flow.updated", "broadcast.sent", "webhook.created"
+  title: string; // e.g. "Fluxo 'Black Friday 2026' atualizado"
+  description: string; // e.g. "Adicionou nó de Mensagem e configurou teste A/B com 50% de tráfego"
+  entityType?: 'flow' | 'broadcast' | 'webhook' | 'user' | 'contact' | 'facebook_app' | 'domain' | 'settings';
+  entityId?: string;
+  entityName?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  status: ActivityLogStatus;
+  metadata?: Record<string, any>;
+  diff?: {
+    before?: any;
+    after?: any;
+  };
+  createdAt: string;
+}
+
+// ============================================================================
+// --- WEBHOOK SUBSCRIPTIONS (EVENT-DRIVEN DISPATCH) TYPES ---
+// ============================================================================
+
+export type WebhookEventTopic =
+  | 'contact.created'
+  | 'contact.updated'
+  | 'contact.tag_added'
+  | 'contact.tag_removed'
+  | 'contact.opt_out'
+  | 'message.received'
+  | 'message.sent'
+  | 'comment.received'
+  | 'comment.replied'
+  | 'flow.started'
+  | 'flow.step_completed'
+  | 'flow.completed'
+  | 'flow.error'
+  | 'broadcast.started'
+  | 'broadcast.completed'
+  | 'broadcast.failed'
+  | 'chat.handover_requested'
+  | 'chat.resolved';
+
+export interface WebhookHeader {
+  key: string;
+  value: string;
+}
+
+export interface WebhookSubscription {
+  id: string;
+  name: string; // e.g. "CRM HubSpot Sync", "Notificador Slack Leads"
+  targetUrl: string; // e.g. "https://api.hubapi.com/webhooks/v1/..."
+  secret: string; // HMAC secret token
+  events: WebhookEventTopic[]; // List of subscribed event topics
+  isActive: boolean;
+  tenantId: string;
+  headers?: WebhookHeader[];
+  retryCount: number; // e.g. 3
+  timeoutSeconds: number; // e.g. 10
+  format: 'json' | 'form_data';
+  description?: string;
+  stats: {
+    totalSent: number;
+    successCount: number;
+    failureCount: number;
+    lastStatusCode?: number;
+    lastLatencyMs?: number;
+    lastSentAt?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebhookSubscriptionDeliveryLog {
+  id: string;
+  subscriptionId: string;
+  subscriptionName: string;
+  event: WebhookEventTopic;
+  targetUrl: string;
+  statusCode: number;
+  durationMs: number;
+  status: 'success' | 'failed' | 'timeout';
+  requestPayload: any;
+  requestHeaders?: Record<string, string>;
+  responseBody?: string;
+  errorMessage?: string;
+  attempts: number;
+  createdAt: string;
+}
+
+// ============================================================================
+// --- EXTERNAL MESSAGE WEBHOOKS & CALLBACK AUTHENTICATION TYPES ---
+// ============================================================================
+
+export type ExternalWebhookAuthType = 
+  | 'bearer'
+  | 'api_key'
+  | 'hmac_sha256'
+  | 'basic'
+  | 'oauth2_client_credentials'
+  | 'none';
+
+export type ExternalMessageEventType =
+  | 'message.received'
+  | 'message.sent'
+  | 'message.media_received'
+  | 'message.audio_transcribed'
+  | 'message.delivered'
+  | 'message.read'
+  | 'message.reaction'
+  | 'message.postback'
+  | 'message.story_reply'
+  | 'message.story_mention'
+  | 'message.failed';
+
+export type ExternalWebhookPlatformPreset =
+  | 'custom_rest'
+  | 'n8n'
+  | 'make'
+  | 'zapier'
+  | 'typebot'
+  | 'evolution_api'
+  | 'chatwoot'
+  | 'zapi'
+  | 'meta_cloud_api';
+
+export type ExternalWebhookPayloadFormat =
+  | 'standard_json'
+  | 'meta_graph_compatible'
+  | 'typebot_compatible'
+  | 'n8n_structured';
+
+export interface ExternalMessageWebhookEndpoint {
+  id: string;
+  name: string;
+  description?: string;
+  targetUrl: string;
+  platform: ExternalWebhookPlatformPreset;
+  channelFilter: ChannelType;
+  events: ExternalMessageEventType[];
+  isActive: boolean;
+  
+  // Authentication Configuration
+  authType: ExternalWebhookAuthType;
+  bearerToken?: string;
+  apiKeyHeaderName?: string;
+  apiKeyValue?: string;
+  hmacSecret?: string;
+  hmacHeaderName?: string;
+  basicUsername?: string;
+  basicPassword?: string;
+  verifyToken?: string;
+  
+  // Custom headers
+  customHeaders?: { key: string; value: string }[];
+  
+  // Payload & Delivery Settings
+  payloadFormat: ExternalWebhookPayloadFormat;
+  includeContactMetadata: boolean;
+  includeCustomFields: boolean;
+  includeRawPayload: boolean;
+  timeoutSeconds: number;
+  maxRetries: number;
+  retryPolicy?: WebhookRetryPolicy;
+  
+  // Statistics
+  stats: {
+    totalSent: number;
+    successCount: number;
+    failedCount: number;
+    lastLatencyMs?: number;
+    lastStatusCode?: number;
+    lastDispatchedAt?: string;
+  };
+  
+  tenantId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WebhookBackoffStrategy = 'exponential' | 'exponential_jitter' | 'linear' | 'fixed' | 'fibonacci';
+
+export interface WebhookRetryPolicy {
+  enabled: boolean;
+  maxRetries: number; // 1 to 10 attempts (default 3 or 5)
+  initialIntervalSeconds: number; // Initial wait T0 (e.g. 1s, 2s, 5s)
+  multiplier: number; // Factor multiplier (e.g. 2.0x, 1.5x)
+  maxIntervalSeconds: number; // Capped max interval (e.g. 300s, 600s, 3600s)
+  strategy: WebhookBackoffStrategy;
+  enableJitter: boolean; // Randomize delay within range to prevent Thundering Herd
+  retryableStatusCodes: number[]; // e.g. [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524]
+  nonRetryableStatusCodes: number[]; // e.g. [400, 401, 403, 404, 422]
+  deadLetterQueue: {
+    enabled: boolean;
+    notifyOnExhausted?: boolean;
+    autoPurgeDays?: number;
+  };
+}
+
+export interface WebhookRetryStepInfo {
+  attempt: number;
+  delaySeconds: number;
+  cumulativeWaitSeconds: number;
+  scheduledAtEstimateIso?: string;
+  description: string;
+}
+
+export interface WebhookRetryAttemptLog {
+  attemptNumber: number;
+  scheduledAt: string;
+  executedAt: string;
+  delaySeconds: number;
+  statusCode: number;
+  durationMs: number;
+  status: 'success' | 'failed' | 'timeout';
+  errorMessage?: string;
+  responseSnippet?: string;
+}
+
+export interface ExternalWebhookDeliveryEvent {
+  id: string;
+  endpointId: string;
+  endpointName: string;
+  event: ExternalMessageEventType;
+  targetUrl: string;
+  channel: ChannelType;
+  statusCode: number;
+  durationMs: number;
+  status: 'success' | 'failed' | 'timeout';
+  requestPayload: any;
+  requestHeaders?: Record<string, string>;
+  responseBody?: string;
+  errorMessage?: string;
+  attempts: number;
+  maxAttempts?: number;
+  isRetry?: boolean;
+  retryPolicyApplied?: WebhookRetryPolicy;
+  retryHistory?: WebhookRetryAttemptLog[];
+  nextRetryAt?: string;
+  dlqStatus?: 'none' | 'queued' | 'reprocessed' | 'discarded';
+  createdAt: string;
+}
+
+export interface WebhookRetryQueueItem {
+  id: string;
+  deliveryId: string;
+  endpointId: string;
+  endpointName: string;
+  targetUrl: string;
+  currentAttempt: number;
+  maxRetries: number;
+  scheduledExecutionAt: string;
+  secondsRemaining: number;
+  lastStatusCode?: number;
+  lastErrorMessage?: string;
+  payload: any;
+  headers: Record<string, string>;
+  retryPolicy: WebhookRetryPolicy;
+  status: 'pending' | 'in_progress' | 'cancelled' | 'failed_exhausted';
+  tenantId: string;
+  createdAt: string;
+}
+
+export interface WebhookDeadLetterItem {
+  id: string;
+  deliveryId: string;
+  endpointId: string;
+  endpointName: string;
+  targetUrl: string;
+  event: ExternalMessageEventType;
+  channel: ChannelType;
+  totalAttempts: number;
+  lastStatusCode: number;
+  lastErrorMessage: string;
+  payload: any;
+  headers: Record<string, string>;
+  retryHistory: WebhookRetryAttemptLog[];
+  failedAt: string;
+  status: 'queued' | 'reprocessed' | 'discarded';
+  tenantId: string;
+  reprocessedAt?: string;
+}
+
+
 
 
 

@@ -6,6 +6,7 @@ import {
   RotateCcw, 
   Play, 
   Sparkles, 
+  Mic,
   Save, 
   Download, 
   Upload, 
@@ -20,9 +21,10 @@ import {
   Clock,
   Layers
 } from 'lucide-react';
-import { Flow, FlowNode, NodeType, CustomFieldDefinition } from '../../types';
+import { Flow, FlowNode, FlowConnection, NodeType, CustomFieldDefinition } from '../../types';
 import { FlowNodeCard } from './FlowNodeCard';
 import { NodeInspectorDrawer } from './NodeInspectorDrawer';
+import { VoiceToFlowModal } from './VoiceToFlowModal';
 
 interface FlowCanvasProps {
   flow: Flow;
@@ -43,6 +45,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.15, 1.6));
@@ -151,6 +154,18 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     setShowAddMenu(false);
   };
 
+  const handleAddVoiceNodes = (newNodes: FlowNode[], newConnections: FlowConnection[]) => {
+    onUpdateFlow({
+      ...flow,
+      nodes: [...flow.nodes, ...newNodes],
+      connections: [...flow.connections, ...newConnections],
+      updatedAt: new Date().toISOString()
+    });
+    if (newNodes.length > 0) {
+      setSelectedNode(newNodes[0]);
+    }
+  };
+
   const handleSaveFlow = () => {
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 2000);
@@ -218,6 +233,17 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             <span className="text-gray-300">•</span>
             <span>CTR: <strong className="text-emerald-600">{flow.stats.ctr}%</strong></span>
           </div>
+
+          {/* Voice-to-Flow Builder Button */}
+          <button
+            id="btn_open_voice_to_flow"
+            onClick={() => setIsVoiceModalOpen(true)}
+            className="py-1.5 px-3 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-102"
+            title="Criar blocos de fluxo falando ao microfone"
+          >
+            <Mic className="w-3.5 h-3.5 animate-pulse" />
+            <span>Voice-to-Flow</span>
+          </button>
 
           {/* AI Optimizer */}
           <button
@@ -455,6 +481,15 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
           customFields={customFields}
         />
       )}
+
+      {/* Voice-to-Flow Audio Generation Modal */}
+      <VoiceToFlowModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        currentFlow={flow}
+        onAddNodesToFlow={handleAddVoiceNodes}
+        onReplaceFlow={(newFlow) => onUpdateFlow(newFlow)}
+      />
     </div>
   );
 };

@@ -21,7 +21,8 @@ import {
   User as UserIcon,
   MessageCircle,
   Send,
-  DollarSign
+  DollarSign,
+  Layers
 } from 'lucide-react';
 import { NavigationTab, ChannelType } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -141,61 +142,75 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Channel Quick Toggles */}
+        {/* Channel Quick Toggles (Icon Only) */}
         {onSelectChannel && (
           <div className="p-3 border-b border-[#E2E8F0] dark:border-slate-800 bg-[#F8F9FB] dark:bg-slate-800/40">
-            <div className="text-[10px] font-bold text-[#64748B] dark:text-slate-400 uppercase tracking-wider mb-2 px-1">
-              Canal de Foco
+            <div className="flex items-center justify-between text-[10px] font-bold text-[#64748B] dark:text-slate-400 uppercase tracking-wider mb-2 px-1">
+              <span>Canal de Foco</span>
+              <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 capitalize">
+                {selectedChannel === 'omnichannel' ? 'Todos' : selectedChannel === 'messenger' ? 'Facebook' : selectedChannel}
+              </span>
             </div>
-            <div className="grid grid-cols-4 gap-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-[#E2E8F0] dark:border-slate-800 text-[11px]">
+            <div className="grid grid-cols-5 gap-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-[#E2E8F0] dark:border-slate-800">
               <button
                 id="filter_omnichannel"
                 onClick={() => onSelectChannel('omnichannel')}
-                className={`py-1 rounded font-bold transition-all text-center cursor-pointer ${
+                className={`py-1.5 rounded-md transition-all flex items-center justify-center cursor-pointer ${
                   selectedChannel === 'omnichannel'
                     ? 'bg-[#0084FF] text-white shadow-xs'
-                    : 'text-[#64748B] dark:text-slate-400 hover:text-[#1A1D21] dark:hover:text-white'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-[#1A1D21] dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
+                title="Todos os Canais (Omnichannel)"
               >
-                Todos
+                <Layers className="w-4 h-4" />
               </button>
               <button
                 id="filter_whatsapp"
                 onClick={() => onSelectChannel('whatsapp')}
-                className={`py-1 rounded font-bold transition-all flex items-center justify-center gap-0.5 cursor-pointer ${
+                className={`py-1.5 rounded-md transition-all flex items-center justify-center cursor-pointer ${
                   selectedChannel === 'whatsapp'
                     ? 'bg-emerald-600 text-white shadow-xs'
                     : 'text-[#64748B] dark:text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
                 }`}
                 title="WhatsApp (Meta Cloud API + Baileys)"
               >
-                <MessageCircle className="w-3 h-3" />
-                <span>Whats</span>
+                <MessageCircle className="w-4 h-4" />
               </button>
               <button
                 id="filter_instagram"
                 onClick={() => onSelectChannel('instagram')}
-                className={`py-1 rounded font-bold transition-all flex items-center justify-center gap-0.5 cursor-pointer ${
+                className={`py-1.5 rounded-md transition-all flex items-center justify-center cursor-pointer ${
                   selectedChannel === 'instagram'
                     ? 'bg-pink-600 text-white shadow-xs'
                     : 'text-[#64748B] dark:text-slate-400 hover:text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-950/40'
                 }`}
+                title="Instagram Direct"
               >
-                <Instagram className="w-3 h-3" />
-                <span>Insta</span>
+                <Instagram className="w-4 h-4" />
+              </button>
+              <button
+                id="filter_messenger"
+                onClick={() => onSelectChannel('messenger')}
+                className={`py-1.5 rounded-md transition-all flex items-center justify-center cursor-pointer ${
+                  selectedChannel === 'messenger'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40'
+                }`}
+                title="Facebook Messenger"
+              >
+                <Facebook className="w-4 h-4" />
               </button>
               <button
                 id="filter_telegram"
                 onClick={() => onSelectChannel('telegram')}
-                className={`py-1 rounded font-bold transition-all flex items-center justify-center gap-0.5 cursor-pointer ${
+                className={`py-1.5 rounded-md transition-all flex items-center justify-center cursor-pointer ${
                   selectedChannel === 'telegram'
-                    ? 'bg-sky-600 text-white shadow-xs'
-                    : 'text-[#64748B] dark:text-slate-400 hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-950/40'
+                    ? 'bg-sky-500 text-white shadow-xs'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-sky-500 hover:bg-sky-50 dark:hover:bg-sky-950/40'
                 }`}
                 title="Telegram Bot API"
               >
-                <Send className="w-3 h-3" />
-                <span>Tele</span>
+                <Send className="w-4 h-4" />
               </button>
             </div>
           </div>

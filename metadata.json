@@ -1,6 +1,8 @@
 {
   "name": "ManyFlow - Automação Instagram & Messenger",
   "description": "Plataforma Omnichannel de Automação (Instagram, WhatsApp Híbrido Cloud API + Baileys, Telegram, Messenger) com Super Administrador de Grupos VIP, Monetização e A/B Testing.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "microphone"
+  ],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -32,7 +32,7 @@ import {
   Film,
   Image as ImageIcon
 } from 'lucide-react';
-import { FlowNode, FlowButton, QuickReply, NodeType, CustomFieldDefinition } from '../../types';
+import { FlowNode, FlowButton, QuickReply, NodeType, CustomFieldDefinition, MessageVariant } from '../../types';
 
 interface NodeInspectorDrawerProps {
   node: FlowNode | null;
@@ -56,6 +56,47 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
   const [text, setText] = useState(node.data.text || '');
   const [buttons, setButtons] = useState<FlowButton[]>(node.data.buttons || []);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>(node.data.quickReplies || []);
+
+  // In-Node Message A/B Testing State
+  const [isMessageABTestEnabled, setIsMessageABTestEnabled] = useState<boolean>(
+    node.data.isMessageABTestEnabled ?? false
+  );
+
+  const initialVariants: MessageVariant[] = node.data.messageVariants && node.data.messageVariants.length > 0
+    ? node.data.messageVariants
+    : [
+        {
+          id: 'variant_a',
+          name: 'Variante A (Controle)',
+          text: node.data.text || 'Olá {first_name}! Tudo bem? Veja nossas novidades exclusivas:',
+          trafficPercent: 50,
+          buttons: node.data.buttons || [],
+          quickReplies: node.data.quickReplies || [],
+          stats: { runs: 320, opens: 314, clicks: 142, conversions: 68, ctr: 45.2, conversionRate: 21.6 }
+        },
+        {
+          id: 'variant_b',
+          name: 'Variante B (Copy Curto + Desconto)',
+          text: 'Oi {first_name} ✨ Separamos um cupom especial de 20% OFF para você hoje! Quer aproveitar?',
+          trafficPercent: 50,
+          buttons: [
+            { id: 'btn_b_1', text: '🎁 Quero Meu Cupom 20%', type: 'flow', targetNodeId: '' }
+          ],
+          quickReplies: [],
+          stats: { runs: 320, opens: 318, clicks: 210, conversions: 118, ctr: 66.0, conversionRate: 37.1 }
+        }
+      ];
+
+  const [messageVariants, setMessageVariants] = useState<MessageVariant[]>(initialVariants);
+  const [activeVariantId, setActiveVariantId] = useState<string>(
+    initialVariants[0]?.id || 'variant_a'
+  );
+  const [messageTestGoal, setMessageTestGoal] = useState<'ctr' | 'lead_tag' | 'purchase' | 'response' | 'human_handover'>(
+    node.data.messageTestGoal || 'ctr'
+  );
+  const [messageTestGoalTag, setMessageTestGoalTag] = useState<string>(
+    node.data.messageTestGoalTag || 'Lead-Convertido'
+  );
   const [delaySeconds, setDelaySeconds] = useState(node.data.delaySeconds || 2);
   const [showTypingIndicator, setShowTypingIndicator] = useState(node.data.showTypingIndicator ?? true);
   const [tagToAdd, setTagToAdd] = useState(node.data.tagToAdd || '');
@@ -158,8 +199,152 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
     setKeywords(keywords.filter((_, i) => i !== index));
   };
 
+  const handleSwitchVariantTab = (targetVariantId: string) => {
+    // 1. Save active variant data
+    const updatedVariants = messageVariants.map((v) => {
+      if (v.id === activeVariantId) {
+        return {
+          ...v,
+          text,
+          buttons,
+          quickReplies
+        };
+      }
+      return v;
+    });
+
+    // 2. Load target variant data
+    const targetVariant = updatedVariants.find((v) => v.id === targetVariantId);
+    if (targetVariant) {
+      setText(targetVariant.text || '');
+      setButtons(targetVariant.buttons || []);
+      setQuickReplies(targetVariant.quickReplies || []);
+    }
+
+    setMessageVariants(updatedVariants);
+    setActiveVariantId(targetVariantId);
+  };
+
+  const handleAddMessageVariant = () => {
+    if (messageVariants.length >= 4) return;
+    const newId = `variant_${String.fromCharCode(97 + messageVariants.length)}`; // 'variant_c' or 'variant_d'
+    const letters = ['A', 'B', 'C', 'D'];
+    const letter = letters[messageVariants.length] || 'C';
+
+    const count = messageVariants.length + 1;
+    const equalShare = Math.floor(100 / count);
+    const remainder = 100 - equalShare * count;
+
+    const newVariant: MessageVariant = {
+      id: newId,
+      name: `Variante ${letter} (Nova Hipótese)`,
+      text: `Olá {first_name}! 🚀 Confira nossa oferta especial da Variante ${letter}:`,
+      trafficPercent: equalShare + remainder,
+      buttons: [
+        { id: `btn_${newId}_1`, text: `⚡ Acessar Oferta ${letter}`, type: 'flow', targetNodeId: '' }
+      ],
+      quickReplies: [],
+      stats: { runs: 100, opens: 98, clicks: 54, conversions: 24, ctr: 55.1, conversionRate: 24.5 }
+    };
+
+    const rebalanced = messageVariants.map((v) => ({
+      ...v,
+      trafficPercent: equalShare
+    }));
+
+    const finalVariants = [...rebalanced, newVariant];
+    setMessageVariants(finalVariants);
+    handleSwitchVariantTab(newId);
+  };
+
+  const handleRemoveMessageVariant = (variantId: string) => {
+    if (messageVariants.length <= 2) return;
+    const remaining = messageVariants.filter((v) => v.id !== variantId);
+    const equalShare = Math.floor(100 / remaining.length);
+    const remainder = 100 - equalShare * remaining.length;
+
+    const rebalanced = remaining.map((v, i) => ({
+      ...v,
+      trafficPercent: i === 0 ? equalShare + remainder : equalShare
+    }));
+
+    setMessageVariants(rebalanced);
+    if (activeVariantId === variantId) {
+      const first = rebalanced[0];
+      setActiveVariantId(first.id);
+      setText(first.text || '');
+      setButtons(first.buttons || []);
+      setQuickReplies(first.quickReplies || []);
+    }
+  };
+
+  const handleSetVariantTrafficPreset = (preset: '50_50' | '70_30' | '80_20' | 'equal') => {
+    if (preset === '50_50' && messageVariants.length === 2) {
+      setMessageVariants([
+        { ...messageVariants[0], trafficPercent: 50 },
+        { ...messageVariants[1], trafficPercent: 50 }
+      ]);
+    } else if (preset === '70_30' && messageVariants.length === 2) {
+      setMessageVariants([
+        { ...messageVariants[0], trafficPercent: 70 },
+        { ...messageVariants[1], trafficPercent: 30 }
+      ]);
+    } else if (preset === '80_20' && messageVariants.length === 2) {
+      setMessageVariants([
+        { ...messageVariants[0], trafficPercent: 80 },
+        { ...messageVariants[1], trafficPercent: 20 }
+      ]);
+    } else {
+      // Equal split among all variants
+      const count = messageVariants.length;
+      const equalShare = Math.floor(100 / count);
+      const remainder = 100 - equalShare * count;
+      setMessageVariants(
+        messageVariants.map((v, i) => ({
+          ...v,
+          trafficPercent: i === 0 ? equalShare + remainder : equalShare
+        }))
+      );
+    }
+  };
+
+  const handleUpdateVariantTrafficPercent = (id: string, percent: number) => {
+    const clamped = Math.max(5, Math.min(95, percent));
+    if (messageVariants.length === 2) {
+      const otherId = messageVariants.find((v) => v.id !== id)?.id;
+      setMessageVariants(
+        messageVariants.map((v) => {
+          if (v.id === id) return { ...v, trafficPercent: clamped };
+          if (v.id === otherId) return { ...v, trafficPercent: 100 - clamped };
+          return v;
+        })
+      );
+    } else {
+      // Multiple variants: adjust proportionally
+      setMessageVariants(
+        messageVariants.map((v) => (v.id === id ? { ...v, trafficPercent: clamped } : v))
+      );
+    }
+  };
+
   const handleSave = () => {
     const ratioB = 100 - splitRatioA;
+
+    // Make sure active variant is synced into messageVariants
+    const syncedMessageVariants = isMessageABTestEnabled
+      ? messageVariants.map((v) => {
+          if (v.id === activeVariantId) {
+            return {
+              ...v,
+              text,
+              buttons,
+              quickReplies
+            };
+          }
+          return v;
+        })
+      : messageVariants;
+
     const updated: FlowNode = {
       ...node,
       title,
@@ -168,6 +353,10 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
         text,
         buttons,
         quickReplies,
+        isMessageABTestEnabled,
+        messageVariants: syncedMessageVariants,
+        messageTestGoal,
+        messageTestGoalTag,
         delaySeconds,
         showTypingIndicator,
         tagToAdd,
@@ -438,6 +627,245 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
         {/* Message Type Specific Controls */}
         {node.type === 'message' && (
           <div className="space-y-5">
+            {/* IN-NODE A/B SPLIT TESTING CONTROL PANEL */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-fuchsia-50/70 via-purple-50/50 to-blue-50/40 border border-fuchsia-200/80 shadow-xs space-y-4">
+              {/* Top Toggle Switch */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-fuchsia-100 text-fuchsia-700">
+                    <Split className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-[#1A1D21]">Divisão de Tráfego em Teste A/B</h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-fuchsia-100 text-fuchsia-900 border border-fuchsia-200">
+                        Otimização de Copy
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#64748B] mt-0.5">
+                      Teste variações de texto, CTAs e botões para medir conversão e CTR.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isMessageABTestEnabled}
+                    onChange={(e) => setIsMessageABTestEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-10 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-fuchsia-600"></div>
+                </label>
+              </div>
+
+              {/* A/B Testing Active Controls */}
+              {isMessageABTestEnabled && (
+                <div className="space-y-4 pt-2 border-t border-fuchsia-100 animate-in fade-in duration-150">
+                  {/* Variant Tabs */}
+                  <div className="flex items-center justify-between gap-1 overflow-x-auto pb-1">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      {messageVariants.map((v) => {
+                        const isActive = v.id === activeVariantId;
+                        const isLeading = v.stats && v.stats.conversionRate > 30;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => handleSwitchVariantTab(v.id)}
+                            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap border ${
+                              isActive
+                                ? 'bg-fuchsia-600 text-white border-fuchsia-600 shadow-xs'
+                                : 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200'
+                            }`}
+                          >
+                            <span className="w-2 h-2 rounded-full bg-white/90" />
+                            <span>{v.name.slice(0, 15)}</span>
+                            <span
+                              className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                                isActive ? 'bg-white/20 text-white' : 'bg-fuchsia-50 text-fuchsia-800'
+                              }`}
+                            >
+                              {v.trafficPercent}%
+                            </span>
+                            {isLeading && <Trophy className="w-3 h-3 text-amber-300 ml-0.5" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {messageVariants.length < 4 && (
+                      <button
+                        type="button"
+                        onClick={handleAddMessageVariant}
+                        className="p-1.5 rounded-xl bg-white hover:bg-fuchsia-50 border border-fuchsia-200 text-fuchsia-700 transition-colors text-xs font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                        title="Adicionar Nova Variante"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span className="text-[11px]">Nova Variante</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Traffic Distribution Controls */}
+                  <div className="p-3 bg-white rounded-xl border border-gray-200 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-[#1A1D21] uppercase tracking-wider flex items-center gap-1">
+                        <Sliders className="w-3.5 h-3.5 text-fuchsia-600" />
+                        <span>Distribuição de Tráfego (% dos Contatos)</span>
+                      </span>
+                      <span className="text-[10px] font-bold text-gray-500">Soma: 100%</span>
+                    </div>
+
+                    {/* Quick Presets */}
+                    <div className="flex items-center gap-1.5 text-[10px]">
+                      <span className="text-gray-500 font-semibold">Atalhos:</span>
+                      <button
+                        type="button"
+                        onClick={() => handleSetVariantTrafficPreset('50_50')}
+                        className="px-2 py-0.5 rounded bg-gray-100 hover:bg-fuchsia-100 hover:text-fuchsia-800 font-bold transition-colors cursor-pointer"
+                      >
+                        50% / 50%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetVariantTrafficPreset('70_30')}
+                        className="px-2 py-0.5 rounded bg-gray-100 hover:bg-fuchsia-100 hover:text-fuchsia-800 font-bold transition-colors cursor-pointer"
+                      >
+                        70% / 30%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetVariantTrafficPreset('80_20')}
+                        className="px-2 py-0.5 rounded bg-gray-100 hover:bg-fuchsia-100 hover:text-fuchsia-800 font-bold transition-colors cursor-pointer"
+                      >
+                        80% / 20%
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetVariantTrafficPreset('equal')}
+                        className="px-2 py-0.5 rounded bg-gray-100 hover:bg-fuchsia-100 hover:text-fuchsia-800 font-bold transition-colors cursor-pointer"
+                      >
+                        Igualitário
+                      </button>
+                    </div>
+
+                    {/* Sliders for each variant */}
+                    <div className="space-y-2 pt-1">
+                      {messageVariants.map((v) => (
+                        <div key={v.id} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs font-semibold">
+                            <span className="text-[#1A1D21]">{v.name}:</span>
+                            <span className="font-mono text-fuchsia-700 font-bold">{v.trafficPercent}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={5}
+                            max={95}
+                            value={v.trafficPercent}
+                            onChange={(e) => handleUpdateVariantTrafficPercent(v.id, Number(e.target.value))}
+                            className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-fuchsia-600"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Goal and Metrics Panel */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* Goal Metric */}
+                    <div className="p-3 bg-white rounded-xl border border-gray-200 space-y-1.5">
+                      <label className="block text-[10px] font-bold text-[#64748B] uppercase tracking-wider">
+                        Meta Principal de Conversão
+                      </label>
+                      <select
+                        value={messageTestGoal}
+                        onChange={(e) => setMessageTestGoal(e.target.value as any)}
+                        className="w-full px-2 py-1.5 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] text-xs font-bold text-[#1A1D21]"
+                      >
+                        <option value="ctr">CTR (Cliques em Botões)</option>
+                        <option value="response">Resposta Direta do Usuário</option>
+                        <option value="lead_tag">Atribuição de Tag no CRM</option>
+                        <option value="human_handover">Transferência p/ Atendente</option>
+                      </select>
+
+                      {messageTestGoal === 'lead_tag' && (
+                        <input
+                          type="text"
+                          value={messageTestGoalTag}
+                          onChange={(e) => setMessageTestGoalTag(e.target.value)}
+                          placeholder="Tag de Conversão (ex: Comprou)"
+                          className="w-full px-2 py-1 rounded bg-[#F8F9FB] border border-[#E2E8F0] text-xs text-[#1A1D21] mt-1"
+                        />
+                      )}
+                    </div>
+
+                    {/* Active Variant Conversion Stats */}
+                    <div className="p-3 bg-white rounded-xl border border-gray-200 space-y-1.5">
+                      <div className="flex items-center justify-between text-[10px] font-bold text-[#64748B] uppercase tracking-wider">
+                        <span>Estatísticas da Variante Ativa</span>
+                        <BarChart3 className="w-3 h-3 text-fuchsia-600" />
+                      </div>
+
+                      {(() => {
+                        const activeVar = messageVariants.find((v) => v.id === activeVariantId);
+                        const stats = activeVar?.stats || {
+                          runs: 280,
+                          opens: 275,
+                          clicks: 140,
+                          conversions: 62,
+                          ctr: 50.0,
+                          conversionRate: 22.1
+                        };
+                        return (
+                          <div className="grid grid-cols-2 gap-1.5 pt-0.5 text-[11px]">
+                            <div className="p-1.5 rounded bg-gray-50 border border-gray-100">
+                              <span className="text-[9px] text-gray-500 block">CTR de Botão</span>
+                              <span className="font-bold text-fuchsia-700">{stats.ctr}%</span>
+                            </div>
+                            <div className="p-1.5 rounded bg-emerald-50 border border-emerald-100">
+                              <span className="text-[9px] text-emerald-800 block">Conversão</span>
+                              <span className="font-bold text-emerald-700">{stats.conversionRate}%</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Active Variant Name & Hypothesis Editor */}
+                  <div className="p-3 bg-fuchsia-50/40 rounded-xl border border-fuchsia-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-fuchsia-900 uppercase tracking-wider">
+                        Identificação: {messageVariants.find((v) => v.id === activeVariantId)?.name}
+                      </label>
+                      {messageVariants.length > 2 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveMessageVariant(activeVariantId)}
+                          className="text-[10px] text-rose-600 hover:underline font-semibold cursor-pointer"
+                        >
+                          Excluir esta Variante
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={messageVariants.find((v) => v.id === activeVariantId)?.name || ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMessageVariants(
+                          messageVariants.map((v) => (v.id === activeVariantId ? { ...v, name: val } : v))
+                        );
+                      }}
+                      placeholder="Nome da variante (ex: Copy Curto com Emoji)"
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-fuchsia-200 text-xs font-semibold text-[#1A1D21]"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* TEXT AND VARIABLES SECTION */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">

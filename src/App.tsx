@@ -43,6 +43,12 @@ const AIFlowGeneratorModal = lazy(() =>
 const LoginPage = lazy(() =>
   import('./components/Auth/LoginPage').then((m) => ({ default: m.LoginPage }))
 );
+const HomePage = lazy(() =>
+  import('./components/Home/HomePage').then((m) => ({ default: m.HomePage }))
+);
+const MasterSecurityModal = lazy(() =>
+  import('./components/Auth/MasterSecurityModal').then((m) => ({ default: m.MasterSecurityModal }))
+);
 const UserProfileModal = lazy(() =>
   import('./components/Auth/UserProfileModal').then((m) => ({ default: m.UserProfileModal }))
 );
@@ -63,6 +69,10 @@ import { NavigationTab, Flow, KeywordTrigger, PostCommentGrowthTool, LiveConvers
 
 function MainApp() {
   const { user, tenant, isAuthenticated } = useAuth();
+
+  // Public Landing / Auth State
+  const [authMode, setAuthMode] = useState<'home' | 'login' | 'register' | 'master'>('home');
+  const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
 
   // Navigation & View state
   const [currentTab, setCurrentTab] = useState<NavigationTab>('flows');
@@ -216,6 +226,52 @@ function MainApp() {
       dbService.saveContactsBatch(newContacts).catch(() => {});
     }
   };
+
+  // If NOT authenticated, render public Landing Page (Home) or Login/Register/Master portal
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen w-screen overflow-x-hidden font-sans">
+        <Suspense fallback={<ComponentLoader label="Carregando ManyFlow..." />}>
+          {authMode === 'home' ? (
+            <HomePage
+              onOpenLogin={() => setAuthMode('login')}
+              onOpenRegister={() => setAuthMode('register')}
+              onOpenMasterModal={() => setIsMasterModalOpen(true)}
+              onOpenDemo={() => setIsSimulatorOpen(true)}
+            />
+          ) : (
+            <LoginPage
+              initialMode={authMode}
+              onBackToHome={() => setAuthMode('home')}
+              onOpenMasterLogin={() => setAuthMode('master')}
+              onSuccess={() => setAuthMode('home')}
+            />
+          )}
+
+          {/* Master Password Emergency Modal */}
+          {isMasterModalOpen && (
+            <MasterSecurityModal
+              isOpen={isMasterModalOpen}
+              onClose={() => setIsMasterModalOpen(false)}
+              onSuccessLogin={() => setAuthMode('home')}
+            />
+          )}
+
+          {/* Interactive Mobile Simulator for Public Demo */}
+          {isSimulatorOpen && (
+            <InteractiveSimulatorModal
+              isOpen={isSimulatorOpen}
+              onClose={() => setIsSimulatorOpen(false)}
+              flows={flows}
+              activeFlowId={selectedFlowId}
+              knowledgeBase={knowledgeBase}
+              customFields={customFields}
+            />
+          )}
+        </Suspense>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#F8F9FB] text-[#1A1D21] font-sans antialiased">
@@ -395,6 +451,16 @@ function MainApp() {
             isOpen={isProfileModalOpen}
             onClose={() => setIsProfileModalOpen(false)}
             onOpenLoginModal={() => setIsLoginModalOpen(true)}
+          />
+        </Suspense>
+      )}
+
+      {/* Master Security Root Modal */}
+      {isMasterModalOpen && (
+        <Suspense fallback={null}>
+          <MasterSecurityModal
+            isOpen={isMasterModalOpen}
+            onClose={() => setIsMasterModalOpen(false)}
           />
         </Suspense>
       )}

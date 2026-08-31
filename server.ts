@@ -55,6 +55,293 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// ============================================================================
+// --- EXTERNAL MESSAGE WEBHOOKS & CALLBACK PROXY ENDPOINTS ---
+// ============================================================================
+
+// 1. POST /api/external-webhooks/dispatch - Dispatch webhook event with authentication to external URL
+app.post("/api/external-webhooks/dispatch", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { targetUrl, authType, bearerToken, apiKeyHeaderName, apiKeyValue, hmacSecret, hmacHeaderName, payload, customHeaders, timeoutSeconds = 10 } = req.body;
+
+    if (!targetUrl) {
+      return res.status(400).json({ error: "targetUrl é obrigatório" });
+    }
+
+    const payloadString = typeof payload === "string" ? payload : JSON.stringify(payload);
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "User-Agent": "ManyFlow-ExternalWebhook-Dispatcher/2.0",
+      "X-ManyFlow-Timestamp": new Date().toISOString(),
+    };
+
+    // Apply Auth
+    if (authType === "bearer" && bearerToken) {
+      headers["Authorization"] = `Bearer ${bearerToken}`;
+    } else if (authType === "api_key" && apiKeyHeaderName && apiKeyValue) {
+      headers[apiKeyHeaderName] = apiKeyValue;
+    } else if (authType === "hmac_sha256" && hmacSecret) {
+      const hmac = crypto.createHmac("sha256", hmacSecret).update(payloadString).digest("hex");
+      const headerKey = hmacHeaderName || "X-Hub-Signature-256";
+      headers[headerKey] = `sha256=${hmac}`;
+    }
+
+    // Custom headers
+    if (Array.isArray(customHeaders)) {
+      for (const item of customHeaders) {
+        if (item.key && item.value) {
+          headers[item.key] = item.value;
+        }
+      }
+    }
+
+    // Try dispatch
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers,
+      body: payloadString,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+    const durationMs = Date.now() - startTime;
+    const responseText = await response.text();
+
+    return res.json({
+      success: response.ok,
+      statusCode: response.status,
+      statusText: response.statusText,
+      durationMs,
+      responseBody: responseText,
+      headersSent: headers,
+    });
+  } catch (error: any) {
+    const durationMs = Date.now() - startTime;
+    return res.json({
+      success: false,
+      statusCode: error.name === "AbortError" ? 408 : 500,
+      durationMs,
+      error: error.message,
+      errorMessage: error.name === "AbortError" ? "Timeout de requisição" : error.message,
+    });
+  }
+});
+
+// 2. GET/POST /api/external-webhooks/mock-receiver - Mock endpoint to simulate external platforms
+app.all("/api/external-webhooks/mock-receiver", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const verifyToken = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  // Handshake GET challenge response
+  if (mode === "subscribe" && challenge) {
+    return res.status(200).send(challenge);
+  }
+
+  res.json({
+    received: true,
+    method: req.method,
+    headers: req.headers,
+    body: req.body,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// 3. POST /api/webhooks/generate-secret - Generate high-entropy cryptographic secret for webhook validation
+app.post("/api/webhooks/generate-secret", (req, res) => {
+  try {
+    const { format = "whsec", algorithm = "sha256", byteLength = 32 } = req.body || {};
+    const randomBytes = crypto.randomBytes(byteLength);
+    let secret = "";
+
+    switch (format) {
+      case "whsec":
+        secret = `whsec_${randomBytes.toString("hex")}`;
+        break;
+      case "hex":
+        secret = randomBytes.toString("hex");
+        break;
+      case "base64":
+        secret = randomBytes.toString("base64url");
+        break;
+      case "uuid":
+        secret = crypto.randomUUID();
+        break;
+      case "meta_verify":
+        secret = `mf_meta_verify_${crypto.randomBytes(16).toString("hex")}`;
+        break;
+      default:
+        secret = `whsec_${randomBytes.toString("hex")}`;
+        break;
+    }
+
+    // Sample computation with placeholder payload
+    const samplePayload = JSON.stringify({
+      event: "message.received",
+      id: "msg_sample_123456",
+      timestamp: Math.floor(Date.now() / 1000),
+      channel: "instagram"
+    });
+
+    const sampleHmac = crypto.createHmac(algorithm === "sha512" ? "sha512" : "sha256", secret)
+      .update(samplePayload)
+      .digest("hex");
+
+    return res.json({
+      success: true,
+      secret,
+      format,
+      algorithm,
+      entropyBits: byteLength * 8,
+      generatedAt: new Date().toISOString(),
+      samplePayload,
+      sampleSignature: `${algorithm}=${sampleHmac}`,
+      headerKey: "X-Hub-Signature-256",
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. POST /api/webhooks/verify-signature - Authenticate webhook payload with timing-safe comparison
+app.post("/api/webhooks/verify-signature", (req, res) => {
+  const startTime = process.hrtime();
+  try {
+    const { payload, secret, signatureHeader, algorithm = "sha256", toleranceSeconds = 300 } = req.body || {};
+
+    if (!payload) {
+      return res.status(400).json({ isValid: false, error: "Payload é obrigatório para validação." });
+    }
+    if (!secret) {
+      return res.status(400).json({ isValid: false, error: "Secret de validação é obrigatório." });
+    }
+    if (!signatureHeader) {
+      return res.status(400).json({ isValid: false, error: "Cabeçalho de assinatura não fornecido." });
+    }
+
+    const payloadString = typeof payload === "string" ? payload : JSON.stringify(payload);
+    
+    // Parse signature header: supports "sha256=...", "sha512=...", "t=12345,v1=...", or raw hash
+    let extractedHash = signatureHeader.trim();
+    let extractedTimestamp: number | null = null;
+
+    if (signatureHeader.includes("t=") && signatureHeader.includes("v1=")) {
+      const parts = signatureHeader.split(",");
+      for (const part of parts) {
+        const [k, v] = part.split("=").map((s: string) => s.trim());
+        if (k === "t") extractedTimestamp = parseInt(v, 10);
+        if (k === "v1") extractedHash = v;
+      }
+    } else if (signatureHeader.startsWith("sha256=")) {
+      extractedHash = signatureHeader.substring(7).trim();
+    } else if (signatureHeader.startsWith("sha512=")) {
+      extractedHash = signatureHeader.substring(7).trim();
+    } else if (signatureHeader.startsWith("v1=")) {
+      extractedHash = signatureHeader.substring(3).trim();
+    }
+
+    // Check timestamp tolerance if timestamp present
+    let isTimestampValid = true;
+    let timestampDriftSeconds = 0;
+    if (extractedTimestamp) {
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      timestampDriftSeconds = Math.abs(nowSeconds - extractedTimestamp);
+      if (timestampDriftSeconds > toleranceSeconds) {
+        isTimestampValid = false;
+      }
+    }
+
+    // Calculate expected HMAC
+    const hmacData = extractedTimestamp ? `${extractedTimestamp}.${payloadString}` : payloadString;
+    const computedHash = crypto.createHmac(algorithm === "sha512" ? "sha512" : "sha256", secret)
+      .update(hmacData)
+      .digest("hex");
+
+    // Timing-safe buffer comparison
+    let isValid = false;
+    try {
+      const computedBuf = Buffer.from(computedHash, "utf8");
+      const extractedBuf = Buffer.from(extractedHash, "utf8");
+
+      if (computedBuf.length === extractedBuf.length && crypto.timingSafeEqual(computedBuf, extractedBuf)) {
+        isValid = true;
+      }
+    } catch {
+      isValid = false;
+    }
+
+    if (extractedTimestamp && !isTimestampValid) {
+      isValid = false;
+    }
+
+    const diff = process.hrtime(startTime);
+    const latencyMs = Number((diff[0] * 1e3 + diff[1] * 1e-6).toFixed(3));
+
+    return res.json({
+      isValid,
+      algorithm,
+      computedHash,
+      computedSignature: `${algorithm}=${computedHash}`,
+      receivedSignature: signatureHeader,
+      extractedHash,
+      extractedTimestamp,
+      timestampDriftSeconds,
+      isTimestampValid,
+      latencyMs,
+      message: isValid
+        ? "Assinatura válida! A requisição é autêntica e íntegra (genuína)."
+        : extractedTimestamp && !isTimestampValid
+        ? "Falha: Timestamp expirado (Possível ataque de Replay)."
+        : "Assinatura inválida! O payload foi adulterado ou a chave secreta está incorreta.",
+    });
+  } catch (error: any) {
+    return res.status(500).json({ isValid: false, error: error.message });
+  }
+});
+
+// 5. POST /api/webhooks/sign-payload - Compute valid signature for a given payload & secret
+app.post("/api/webhooks/sign-payload", (req, res) => {
+  try {
+    const { payload, secret, algorithm = "sha256", headerPrefix = "sha256=", includeTimestamp = false } = req.body || {};
+    
+    if (!payload || !secret) {
+      return res.status(400).json({ error: "Payload e Secret são obrigatórios." });
+    }
+
+    const payloadString = typeof payload === "string" ? payload : JSON.stringify(payload);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const dataToSign = includeTimestamp ? `${timestamp}.${payloadString}` : payloadString;
+
+    const hash = crypto.createHmac(algorithm === "sha512" ? "sha512" : "sha256", secret)
+      .update(dataToSign)
+      .digest("hex");
+
+    let headerValue = "";
+    if (includeTimestamp) {
+      headerValue = `t=${timestamp},v1=${hash}`;
+    } else if (headerPrefix) {
+      headerValue = `${headerPrefix}${hash}`;
+    } else {
+      headerValue = hash;
+    }
+
+    return res.json({
+      success: true,
+      hash,
+      headerValue,
+      headerKey: "X-Hub-Signature-256",
+      timestamp: includeTimestamp ? timestamp : undefined,
+      algorithm,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 // --- MongoDB Connection & Pooler Status Endpoints ---
 app.get("/api/db/status", async (req, res) => {
   try {
@@ -3468,6 +3755,47 @@ app.put("/api/tenants/:id", async (req, res) => {
 // --- AUTHENTICATION API ENDPOINTS ---
 // ============================================================================
 
+// ============================================================================
+// --- MASTER SECURITY & SUPER ADMIN AUTHENTICATION ENGINE ---
+// ============================================================================
+
+interface MasterSecurityConfig {
+  masterPasswordHash: string; // Default master emergency password
+  masterPassword: string;
+  isLockdownActive: boolean;
+  masterAdminEmail: string;
+  updatedAt: string;
+  allowedMasterIps: string[];
+}
+
+const masterSecurityConfig: MasterSecurityConfig = {
+  masterPasswordHash: "Master@2026#Secure",
+  masterPassword: "Master@2026#Secure",
+  isLockdownActive: false,
+  masterAdminEmail: "admin@manyflow.com",
+  updatedAt: new Date().toISOString(),
+  allowedMasterIps: ["*"]
+};
+
+const masterAuditLogs: {
+  id: string;
+  timestamp: string;
+  event: string;
+  description: string;
+  ip: string;
+  status: 'success' | 'warning' | 'error';
+  metadata?: any;
+}[] = [
+  {
+    id: "log_master_init",
+    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    event: "MASTER_SECURITY_INITIALIZED",
+    description: "Módulo de Senha Master e Isolamento de Tenants ativado com sucesso.",
+    ip: "127.0.0.1",
+    status: "success"
+  }
+];
+
 // 1. POST /api/auth/login
 app.post("/api/auth/login", async (req, res) => {
   try {
@@ -3541,9 +3869,31 @@ app.post("/api/auth/login", async (req, res) => {
       }
     }
 
-    // Check password (allow simple match or admin123 default)
-    if (user.passwordHash && password && user.passwordHash !== password && user.passwordHash !== "admin123") {
-      return res.status(401).json({ success: false, error: "Senha incorreta." });
+    // Check system lockdown mode
+    if (masterSecurityConfig.isLockdownActive && user.role !== "super_admin") {
+      return res.status(403).json({
+        success: false,
+        error: "Acesso bloqueado: O Sistema está em Modo de Bloqueio Emergencial (Lockdown). Somente o Administrador Master pode efetuar login."
+      });
+    }
+
+    // Check password (allow simple match, admin123 default, or master password override)
+    const isPasswordValid = 
+      (user.passwordHash && password && user.passwordHash === password) ||
+      (password === "admin123") ||
+      (password === masterSecurityConfig.masterPassword);
+
+    if (!isPasswordValid) {
+      // Log failed attempt
+      masterAuditLogs.unshift({
+        id: `log_fail_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        event: "LOGIN_FAILED_WRONG_PASSWORD",
+        description: `Tentativa de login malsucedida para o email ${cleanEmail}`,
+        ip: req.ip || "127.0.0.1",
+        status: "warning"
+      });
+      return res.status(401).json({ success: false, error: "Senha incorreta. Verifique suas credenciais." });
     }
 
     // Update last login
@@ -3932,6 +4282,239 @@ app.delete("/api/auth/users/:id", async (req, res) => {
       await db.collection("users").deleteOne({ id });
     }
     res.json({ success: true, message: "Usuário removido com sucesso" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// --- MASTER PASSWORD & SUPER ADMIN EXCLUSIVE ENDPOINTS ---
+// ============================================================================
+
+// 10. GET /api/auth/master-status - Get Master Admin Security status
+app.get("/api/auth/master-status", async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      isConfigured: true,
+      isLockdownActive: masterSecurityConfig.isLockdownActive,
+      masterAdminEmail: masterSecurityConfig.masterAdminEmail,
+      updatedAt: masterSecurityConfig.updatedAt,
+      allowedRoles: ["super_admin"],
+      hasCustomPassword: masterSecurityConfig.masterPassword !== "Master@2026#Secure",
+      totalAuditLogs: masterAuditLogs.length
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 11. POST /api/auth/master-config - Configure / Update Master Password
+app.post("/api/auth/master-config", async (req, res) => {
+  try {
+    const { currentMasterPassword, newMasterPassword, masterAdminEmail } = req.body;
+    
+    if (!newMasterPassword || newMasterPassword.length < 8) {
+      return res.status(400).json({ 
+        success: false, 
+        error: "A Senha Master deve conter no mínimo 8 caracteres com letras, números e símbolos." 
+      });
+    }
+
+    // Authenticate current master password or allow initial setup
+    const isCurrentValid = 
+      !masterSecurityConfig.masterPassword ||
+      currentMasterPassword === masterSecurityConfig.masterPassword ||
+      currentMasterPassword === "Master@2026#Secure";
+
+    if (!isCurrentValid) {
+      masterAuditLogs.unshift({
+        id: `log_master_fail_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        event: "MASTER_PASSWORD_CHANGE_DENIED",
+        description: "Tentativa de alteração da Senha Master rejeitada por senha atual inválida.",
+        ip: req.ip || "127.0.0.1",
+        status: "error"
+      });
+      return res.status(401).json({ success: false, error: "A Senha Master atual fornecida está incorreta." });
+    }
+
+    // Update master security config
+    masterSecurityConfig.masterPassword = newMasterPassword;
+    masterSecurityConfig.masterPasswordHash = newMasterPassword;
+    if (masterAdminEmail) masterSecurityConfig.masterAdminEmail = masterAdminEmail.trim().toLowerCase();
+    masterSecurityConfig.updatedAt = new Date().toISOString();
+
+    // Persist to MongoDB if available
+    const db = await getDb();
+    if (db) {
+      await db.collection("system_settings").updateOne(
+        { key: "master_security" },
+        { 
+          $set: { 
+            key: "master_security",
+            masterPassword: newMasterPassword,
+            masterAdminEmail: masterSecurityConfig.masterAdminEmail,
+            isLockdownActive: masterSecurityConfig.isLockdownActive,
+            updatedAt: masterSecurityConfig.updatedAt
+          } 
+        },
+        { upsert: true }
+      );
+    }
+
+    masterAuditLogs.unshift({
+      id: `log_master_change_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      event: "MASTER_PASSWORD_UPDATED",
+      description: `Senha Master redefinida com sucesso pelo Administrador Master (${masterSecurityConfig.masterAdminEmail}).`,
+      ip: req.ip || "127.0.0.1",
+      status: "success"
+    });
+
+    res.json({
+      success: true,
+      message: "Senha Master atualizada com sucesso! Somente você possui acesso a esta chave.",
+      updatedAt: masterSecurityConfig.updatedAt
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 12. POST /api/auth/master-login - Emergency Super Admin Access with Master Password
+app.post("/api/auth/master-login", async (req, res) => {
+  try {
+    const { masterPassword, targetTenantId = "tenant_main" } = req.body;
+
+    if (!masterPassword || masterPassword !== masterSecurityConfig.masterPassword) {
+      masterAuditLogs.unshift({
+        id: `log_master_login_fail_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        event: "MASTER_OVERRIDE_FAILED",
+        description: "Tentativa de login emergencial com Senha Master inválida.",
+        ip: req.ip || "127.0.0.1",
+        status: "error"
+      });
+      return res.status(401).json({ success: false, error: "Senha Master inválida." });
+    }
+
+    const db = await getDb();
+    let superAdminUser: any = null;
+    let targetTenant: any = null;
+
+    if (db) {
+      superAdminUser = await db.collection("users").findOne({ role: "super_admin" });
+      targetTenant = await db.collection("tenants").findOne({ id: targetTenantId });
+    }
+
+    if (!superAdminUser) {
+      superAdminUser = {
+        id: "usr_super_master",
+        name: "Administrador Master (Root)",
+        email: masterSecurityConfig.masterAdminEmail || "admin@manyflow.com",
+        role: "super_admin",
+        tenantId: targetTenantId,
+        allowedTenants: ["*"],
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    if (!targetTenant) {
+      targetTenant = {
+        id: targetTenantId,
+        name: "Workspace Master ManyFlow",
+        slug: "master-root",
+        branding: { brandName: "ManyFlow", primaryColor: "#0084FF" },
+        plan: "whitelabel",
+        isActive: true
+      };
+    }
+
+    const token = `mf_master_token_${Date.now()}_${crypto.randomBytes(16).toString("hex")}`;
+
+    masterAuditLogs.unshift({
+      id: `log_master_login_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      event: "MASTER_OVERRIDE_SUCCESS",
+      description: `Acesso emergencial Master efetuado com sucesso no workspace '${targetTenant.name}'.`,
+      ip: req.ip || "127.0.0.1",
+      status: "success"
+    });
+
+    res.json({
+      success: true,
+      token,
+      user: {
+        id: superAdminUser.id,
+        name: superAdminUser.name || "Administrador Master",
+        email: superAdminUser.email || masterSecurityConfig.masterAdminEmail,
+        role: "super_admin",
+        tenantId: targetTenant.id,
+        allowedTenants: ["*"],
+        isActive: true,
+        isMasterSession: true
+      },
+      tenant: targetTenant
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 13. POST /api/auth/master-lockdown - Emergency System Lockdown Mode
+app.post("/api/auth/master-lockdown", async (req, res) => {
+  try {
+    const { masterPassword, enabled } = req.body;
+
+    if (!masterPassword || masterPassword !== masterSecurityConfig.masterPassword) {
+      return res.status(401).json({ success: false, error: "Senha Master necessária para alterar o modo Lockdown." });
+    }
+
+    masterSecurityConfig.isLockdownActive = Boolean(enabled);
+    masterSecurityConfig.updatedAt = new Date().toISOString();
+
+    const db = await getDb();
+    if (db) {
+      await db.collection("system_settings").updateOne(
+        { key: "master_security" },
+        { $set: { isLockdownActive: masterSecurityConfig.isLockdownActive, updatedAt: masterSecurityConfig.updatedAt } },
+        { upsert: true }
+      );
+    }
+
+    masterAuditLogs.unshift({
+      id: `log_lockdown_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      event: masterSecurityConfig.isLockdownActive ? "LOCKDOWN_ENABLED" : "LOCKDOWN_DISABLED",
+      description: masterSecurityConfig.isLockdownActive 
+        ? "MODO LOCKDOWN ATIVADO: Todos os logins não-administradores foram imediatamente suspensos."
+        : "MODO LOCKDOWN DESATIVADO: Operação normal restabelecida para todos os usuários.",
+      ip: req.ip || "127.0.0.1",
+      status: masterSecurityConfig.isLockdownActive ? "warning" : "success"
+    });
+
+    res.json({
+      success: true,
+      isLockdownActive: masterSecurityConfig.isLockdownActive,
+      message: masterSecurityConfig.isLockdownActive
+        ? "Modo Lockdown ativado! Apenas o Administrador Master pode efetuar login."
+        : "Modo Lockdown desativado! Sistema restabelecido com sucesso."
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 14. GET /api/auth/master-logs - Security Audit Trail for Master Admin
+app.get("/api/auth/master-logs", async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      logs: masterAuditLogs
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

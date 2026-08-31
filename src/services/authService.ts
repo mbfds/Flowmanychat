@@ -166,5 +166,85 @@ export const authService = {
     } catch (err: any) {
       return { success: false, error: err.message || 'Falha ao remover usuário' };
     }
+  },
+
+  // --- MASTER SECURITY METHODS ---
+  async getMasterStatus(): Promise<{
+    success: boolean;
+    isConfigured: boolean;
+    isLockdownActive: boolean;
+    masterAdminEmail: string;
+    updatedAt: string;
+    hasCustomPassword: boolean;
+    totalAuditLogs: number;
+    error?: string;
+  }> {
+    try {
+      const res = await fetch('/api/auth/master-status');
+      return await res.json();
+    } catch (err: any) {
+      return {
+        success: false,
+        isConfigured: true,
+        isLockdownActive: false,
+        masterAdminEmail: 'admin@manyflow.com',
+        updatedAt: new Date().toISOString(),
+        hasCustomPassword: false,
+        totalAuditLogs: 0,
+        error: err.message
+      };
+    }
+  },
+
+  async updateMasterPassword(currentMasterPassword: string, newMasterPassword: string, masterAdminEmail?: string): Promise<{ success: boolean; message?: string; error?: string }> {
+    try {
+      const res = await fetch('/api/auth/master-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentMasterPassword, newMasterPassword, masterAdminEmail }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Falha ao atualizar Senha Master' };
+    }
+  },
+
+  async loginWithMasterPassword(masterPassword: string, targetTenantId?: string): Promise<{ success: boolean; token?: string; user?: User; tenant?: Tenant; error?: string }> {
+    try {
+      const res = await fetch('/api/auth/master-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masterPassword, targetTenantId }),
+      });
+      const data = await res.json();
+      if (data.success && data.token && data.user && data.tenant) {
+        this.setSession(data.token, data.user, data.tenant);
+      }
+      return data;
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Falha ao autenticar com Senha Master' };
+    }
+  },
+
+  async toggleLockdown(enabled: boolean, masterPassword: string): Promise<{ success: boolean; isLockdownActive?: boolean; message?: string; error?: string }> {
+    try {
+      const res = await fetch('/api/auth/master-lockdown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, masterPassword }),
+      });
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Falha ao alterar modo Lockdown' };
+    }
+  },
+
+  async getMasterLogs(): Promise<{ success: boolean; logs?: any[]; error?: string }> {
+    try {
+      const res = await fetch('/api/auth/master-logs');
+      return await res.json();
+    } catch (err: any) {
+      return { success: false, logs: [], error: err.message };
+    }
   }
 };

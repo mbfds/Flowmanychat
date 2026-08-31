@@ -144,6 +144,15 @@ export const WebhooksManager: React.FC<WebhooksManagerProps> = ({
     responseBody?: string;
   } | null>(null);
 
+  // In-Form Test state for endpoint creation
+  const [isTestingNewEndpoint, setIsTestingNewEndpoint] = useState(false);
+  const [newEndpointTestResult, setNewEndpointTestResult] = useState<{
+    success: boolean;
+    statusCode: number;
+    durationMs: number;
+    responseBody?: string;
+  } | null>(null);
+
   // Handshake Token Validator State
   const [verifyTokenInput, setVerifyTokenInput] = useState(settings.globalVerifyToken);
   const [isTestingHandshake, setIsTestingHandshake] = useState(false);
@@ -386,6 +395,39 @@ export const WebhooksManager: React.FC<WebhooksManagerProps> = ({
       });
     } finally {
       setTestingEndpointId(null);
+    }
+  };
+
+  const handleTestNewEndpoint = async () => {
+    if (!newEndpointUrl.trim()) return;
+    setIsTestingNewEndpoint(true);
+    setNewEndpointTestResult(null);
+    try {
+      const res = await fetch('/api/webhooks/test-dispatch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpointUrl: newEndpointUrl.trim(),
+          eventType: 'messages',
+          channel: newEndpointChannel === 'omnichannel' ? 'instagram' : newEndpointChannel
+        })
+      });
+      const data = await res.json();
+      setNewEndpointTestResult({
+        success: data.success,
+        statusCode: data.statusCode || (data.success ? 200 : 500),
+        durationMs: data.durationMs || 45,
+        responseBody: data.responseBody || (data.success ? 'HTTP 200 OK - Evento Entregue' : 'Falha na resposta')
+      });
+    } catch (err: any) {
+      setNewEndpointTestResult({
+        success: false,
+        statusCode: 500,
+        durationMs: 0,
+        responseBody: err.message
+      });
+    } finally {
+      setIsTestingNewEndpoint(false);
     }
   };
 
@@ -666,16 +708,74 @@ export const WebhooksManager: React.FC<WebhooksManagerProps> = ({
                     </div>
 
                     <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-[#1A1D21]">URL de Destino (Endpoint URL)</label>
-                      <input
-                        type="url"
-                        placeholder="https://seu-servidor.com/webhook/meta-inbound"
-                        value={newEndpointUrl}
-                        onChange={(e) => setNewEndpointUrl(e.target.value)}
-                        className="w-full text-xs p-2 rounded-lg border border-[#E2E8F0] focus:ring-1 focus:ring-[#0084FF] outline-hidden bg-white font-mono"
-                        required
-                      />
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-semibold text-[#1A1D21]">URL de Destino (Endpoint URL) *</label>
+                        <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          <span>Validação ao vivo</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="url"
+                          placeholder="https://seu-servidor.com/webhook/meta-inbound"
+                          value={newEndpointUrl}
+                          onChange={(e) => {
+                            setNewEndpointUrl(e.target.value);
+                            if (newEndpointTestResult) setNewEndpointTestResult(null);
+                          }}
+                          className="flex-1 text-xs p-2 rounded-lg border border-[#E2E8F0] focus:ring-1 focus:ring-[#0084FF] outline-hidden bg-white font-mono"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={handleTestNewEndpoint}
+                          disabled={isTestingNewEndpoint || !newEndpointUrl.trim()}
+                          className="px-3 py-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-all shrink-0"
+                          title="Dispara um evento de teste para a URL informada"
+                        >
+                          {isTestingNewEndpoint ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Testando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Send className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Enviar Teste</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
+
+                    {/* Test result feedback banner in creation form */}
+                    {newEndpointTestResult && (
+                      <div
+                        className={`p-3 rounded-lg border text-xs space-y-1 ${
+                          newEndpointTestResult.success
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                            : 'bg-rose-50 border-rose-200 text-rose-900'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-bold">
+                          <div className="flex items-center gap-1.5">
+                            {newEndpointTestResult.success ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-rose-600" />
+                            )}
+                            <span>{newEndpointTestResult.success ? 'Teste Bem-Sucedido!' : 'Falha na Validação'}</span>
+                          </div>
+                          <span className="font-mono text-[10px] bg-white/80 px-2 py-0.5 rounded-full border border-current">
+                            HTTP {newEndpointTestResult.statusCode} ({newEndpointTestResult.durationMs}ms)
+                          </span>
+                        </div>
+                        <p className="text-[11px] opacity-90">
+                          {newEndpointTestResult.responseBody || (newEndpointTestResult.success ? 'Endpoint respondeu positivamente.' : 'O endpoint não respondeu com sucesso.')}
+                        </p>
+                      </div>
+                    )}
 
                     <div className="space-y-1">
                       <label className="text-[11px] font-semibold text-[#1A1D21]">Canal Principal</label>
@@ -690,12 +790,24 @@ export const WebhooksManager: React.FC<WebhooksManagerProps> = ({
                       </select>
                     </div>
 
-                    <button
-                      type="submit"
-                      className="w-full py-2 rounded-lg bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
-                    >
-                      Salvar e Cadastrar Endpoint
-                    </button>
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleTestNewEndpoint}
+                        disabled={isTestingNewEndpoint || !newEndpointUrl.trim()}
+                        className="py-2 px-3 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {isTestingNewEndpoint ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        <span>Enviar Teste</span>
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex-1 py-2 rounded-lg bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Salvar e Cadastrar Endpoint</span>
+                      </button>
+                    </div>
                   </form>
                 )}
 
