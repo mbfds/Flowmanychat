@@ -3810,11 +3810,16 @@ app.post("/api/auth/login", async (req, res) => {
 
     if (!db) {
       // In-memory demo fallback if DB is still starting
+      const isGestor = cleanEmail.includes("gestor") || cleanEmail.includes("agencia");
+      const isAtendente = cleanEmail.includes("suporte") || cleanEmail.includes("atendente");
+      const role = isAtendente ? "agent" : isGestor ? "manager" : "super_admin";
+      const name = isAtendente ? "Camila Atendente" : isGestor ? "Gestor de Agência" : "Administrador ManyFlow";
+
       const mockUser = {
-        id: "usr_admin_default",
-        name: "Administrador ManyFlow",
+        id: isAtendente ? "usr_atendente_demo" : isGestor ? "usr_gestor_agencia" : "usr_admin_default",
+        name,
         email: cleanEmail,
-        role: "super_admin",
+        role,
         tenantId: "tenant_main",
         allowedTenants: ["tenant_main"],
         isActive: true,
@@ -3847,26 +3852,26 @@ app.post("/api/auth/login", async (req, res) => {
 
     let user: any = await db.collection("users").findOne({ email: cleanEmail });
 
-    // If no user exists yet, auto-create super admin for fast onboarding
+    // If no user exists yet, auto-create demo account or admin
     if (!user) {
-      const userCount = await db.collection("users").countDocuments();
-      if (userCount === 0 || cleanEmail.includes("admin")) {
-        user = {
-          id: `usr_${Date.now()}`,
-          name: cleanEmail.split("@")[0].toUpperCase(),
-          email: cleanEmail,
-          passwordHash: password || "admin123",
-          role: "super_admin",
-          tenantId: "tenant_main",
-          allowedTenants: ["tenant_main"],
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        await db.collection("users").insertOne(user);
-      } else {
-        return res.status(401).json({ success: false, error: "Usuário ou senha incorretos." });
-      }
+      const isGestor = cleanEmail.includes("gestor") || cleanEmail.includes("agencia");
+      const isAtendente = cleanEmail.includes("suporte") || cleanEmail.includes("atendente");
+      const role = isAtendente ? "agent" : isGestor ? "manager" : "super_admin";
+      const name = isAtendente ? "Camila Atendente" : isGestor ? "Gestor de Agência" : cleanEmail.split("@")[0].toUpperCase();
+
+      user = {
+        id: isAtendente ? "usr_atendente_demo" : isGestor ? "usr_gestor_agencia" : `usr_${Date.now()}`,
+        name,
+        email: cleanEmail,
+        passwordHash: password || "admin123",
+        role,
+        tenantId: "tenant_main",
+        allowedTenants: ["tenant_main"],
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      await db.collection("users").insertOne(user);
     }
 
     // Check system lockdown mode

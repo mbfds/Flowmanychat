@@ -31,7 +31,7 @@ export interface MongoStatus {
  */
 export async function getDb(): Promise<Db | null> {
   const uri = process.env.MONGODB_URI;
-  const dbName = process.env.MONGODB_DB_NAME || "manyflow";
+  const configuredDbName = process.env.MONGODB_DB_NAME || "manyflow";
 
   if (!uri) {
     return null;
@@ -67,8 +67,51 @@ export async function getDb(): Promise<Db | null> {
     });
 
     await client.connect();
-    dbInstance = client.db(dbName);
-    console.log(`[MongoDB Connection Pooler] ✅ Pool ativo! Conectado ao banco de dados "${dbName}".`);
+
+    // Determine target DB name with case-insensitivity support
+    let resolvedDbName = configuredDbName;
+
+    // Check if URI contains a DB name in path
+    try {
+      const uriMatch = uri.match(/^mongodb(?:\+srv)?:\/\/[^/]+\/([^?]+)/i);
+      if (uriMatch && uriMatch[1] && uriMatch[1].trim()) {
+        resolvedDbName = decodeURIComponent(uriMatch[1].trim());
+      }
+    } catch {
+      // Ignore parse error
+    }
+
+    // Inspect server existing databases to match casing
+    try {
+      const adminDb = client.db().admin();
+      const dbList = await adminDb.listDatabases();
+      if (dbList && Array.isArray(dbList.databases)) {
+        const existingDb = dbList.databases.find(
+          (d: any) => d.name.toLowerCase() === resolvedDbName.toLowerCase()
+        );
+        if (existingDb) {
+          resolvedDbName = existingDb.name;
+          console.log(`[MongoDB Connection Pooler] Casing de banco de dados ajustado para: "${resolvedDbName}"`);
+        }
+      }
+    } catch {
+      // listDatabases might be restricted on some user roles; continue with resolvedDbName
+    }
+
+    // Connect to target DB
+    try {
+      dbInstance = client.db(resolvedDbName);
+    } catch (dbErr: any) {
+      if (dbErr.message && /already have: \[([^\]]+)\]/i.test(dbErr.message)) {
+        const match = dbErr.message.match(/already have: \[([^\]]+)\]/i);
+        if (match && match[1]) {
+          resolvedDbName = match[1];
+          dbInstance = client.db(resolvedDbName);
+        }
+      }
+    }
+
+    console.log(`[MongoDB Connection Pooler] ✅ Pool ativo! Conectado ao banco de dados "${resolvedDbName}".`);
     
     // Auto-create initial compound & unique indexes for high-speed CRUD operations
     try {
@@ -92,8 +135,19 @@ export async function getDb(): Promise<Db | null> {
         dbInstance.collection("domains").createIndex({ domain: 1 }, { unique: true }),
         dbInstance.collection("domains").createIndex({ tenantId: 1 }),
       ]);
+    } catch (idxErr: any) {
+      // Check if error is case conflict on collection creation and resolve
+      if (idxErr.message && /already have: \[([^\]]+)\]/i.test(idxErr.message)) {
+        const match = idxErr.message.match(/already have: \[([^\]]+)\]/i);
+        if (match && match[1]) {
+          resolvedDbName = match[1];
+          dbInstance = client.db(resolvedDbName);
+        }
+      }
+    }
 
-      // Seed initial tenant and super admin user if empty
+    // Seed initial tenant and demo users if empty
+    try {
       const tenantCount = await dbInstance.collection("tenants").countDocuments();
       if (tenantCount === 0) {
         const defaultTenant = {
@@ -130,30 +184,75 @@ export async function getDb(): Promise<Db | null> {
           updatedAt: new Date().toISOString()
         };
 
-        const defaultAdmin = {
+        await dbInstance.collection("tenants").insertOne(defaultTenant);
+      }
+
+      // Seed Gestor Agência and Atendente
+      const usersCol = dbInstance.collection("users");
+      const usersToSeed = [
+        {
+          id: "usr_gestor_agencia",
+          name: "Gestor de Agência",
+          email: "gestor@agenciadigital.com",
+          passwordHash: "admin123",
+          role: "manager",
+          tenantId: "tenant_main",
+          allowedTenants: ["tenant_main"],
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
+          id: "usr_atendente_demo",
+          name: "Camila Atendente",
+          email: "suporte@atendimento.com",
+          passwordHash: "admin123",
+          role: "agent",
+          tenantId: "tenant_main",
+          allowedTenants: ["tenant_main"],
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        {
           id: "usr_admin_default",
           name: "Administrador ManyFlow",
           email: "admin@manyflow.com",
-          passwordHash: "admin123", // In production hashed, demo easy login
+          passwordHash: "admin123",
           role: "super_admin",
           tenantId: "tenant_main",
           allowedTenants: ["tenant_main"],
           isActive: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
-        };
+        }
+      ];
 
-        await dbInstance.collection("tenants").insertOne(defaultTenant);
-        await dbInstance.collection("users").insertOne(defaultAdmin);
-        console.log("[MongoDB] ✅ Tenant principal e usuário super_admin (admin@manyflow.com) inicializados.");
+      for (const u of usersToSeed) {
+        const exists = await usersCol.findOne({ email: u.email });
+        if (!exists) {
+          await usersCol.insertOne(u);
+        }
       }
-    } catch (idxErr) {
-      // Indexes already exist or created in background
+      console.log("[MongoDB] ✅ Usuários demo (Gestor de Agência e Atendente) prontos.");
+    } catch {
+      // Handled gracefully
     }
 
     isConnecting = false;
     return dbInstance;
   } catch (err: any) {
+    if (err.message && /already have: \[([^\]]+)\]/i.test(err.message)) {
+      const match = err.message.match(/already have: \[([^\]]+)\]/i);
+      if (match && match[1] && client) {
+        const correctDbName = match[1];
+        console.log(`[MongoDB Connection Pooler] Recuperado conflito de casing! Conectando com: "${correctDbName}"`);
+        dbInstance = client.db(correctDbName);
+        isConnecting = false;
+        connectionError = null;
+        return dbInstance;
+      }
+    }
     connectionError = err.message || "Falha ao conectar ao MongoDB";
     console.warn(`[MongoDB Connection Pooler] ⚠️ Erro de conexão: ${connectionError}`);
     isConnecting = false;

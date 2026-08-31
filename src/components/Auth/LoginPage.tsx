@@ -8,7 +8,7 @@ import {
   Eye, 
   EyeOff, 
   Building2, 
-  Crown, 
+  Crown,
   Briefcase, 
   Headphones, 
   Globe, 
@@ -85,7 +85,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setIsLoading(true);
 
     if (mode === 'login') {
-      const res = await login(email || 'admin@manyflow.com', password || 'admin123');
+      const res = await login(email || 'gestor@agenciadigital.com', password || 'admin123');
       setIsLoading(false);
       if (res.success) {
         setSuccessMsg('Login realizado com sucesso! Redirecionando...');
@@ -371,7 +371,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <input
                   type="email"
                   required
-                  placeholder="admin@manyflow.com ou seu email"
+                  placeholder="gestor@agenciadigital.com ou seu email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-hidden transition-all"
@@ -473,31 +473,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <span className="text-[10px] text-slate-400">1-Clique</span>
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('admin@manyflow.com', 'admin123')}
-              className="p-2 rounded-lg bg-white hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-700 text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer shadow-2xs"
-            >
-              <Crown className="w-3.5 h-3.5 text-amber-500" />
-              <span>Super Admin</span>
-            </button>
-
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => handleQuickLogin('gestor@agenciadigital.com', 'admin123')}
-              className="p-2 rounded-lg bg-white hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-700 text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer shadow-2xs"
+              className="p-2.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-700 text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer shadow-2xs group"
             >
-              <Briefcase className="w-3.5 h-3.5 text-blue-500" />
-              <span>Gestor Agência</span>
+              <Briefcase className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" />
+              <span>Gestor de Agência</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleQuickLogin('suporte@atendimento.com', 'admin123')}
-              className="p-2 rounded-lg bg-white hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-700 text-[11px] font-bold flex flex-col items-center gap-1 transition-all cursor-pointer shadow-2xs"
+              className="p-2.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-700 text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer shadow-2xs group"
             >
-              <Headphones className="w-3.5 h-3.5 text-emerald-500" />
+              <Headphones className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
               <span>Atendente</span>
             </button>
           </div>
