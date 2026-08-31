@@ -852,6 +852,71 @@ export interface AuthSession {
   expiresAt: string;
 }
 
+// ============================================================================
+// --- MULTI-APP FACEBOOK / META DEVELOPER APPS TYPES ---
+// ============================================================================
+
+export type FacebookAppType = 'business' | 'consumer' | 'gaming' | 'none';
+export type FacebookAppStatus = 'active' | 'development' | 'restricted' | 'token_expired' | 'pending_review';
+
+export interface FacebookPageAsset {
+  id: string; // Facebook Page ID e.g. "10982348192"
+  name: string; // e.g. "ManyFlow Brasil - Automações"
+  category?: string; // e.g. "Marketing / Software"
+  followersCount?: number;
+  instagramBusinessId?: string;
+  instagramUsername?: string; // e.g. "@manyflow.oficial"
+  instagramAvatarUrl?: string;
+  pageAccessToken?: string;
+  isWebhookSubscribed?: boolean;
+  tasks?: string[];
+}
+
+export interface FacebookWhatsAppAsset {
+  wabaId: string; // WhatsApp Business Account ID e.g. "1982736412"
+  phoneNumberId: string;
+  displayPhoneNumber: string; // e.g. "+55 11 99999-8888"
+  verifiedName: string;
+  qualityRating?: 'GREEN' | 'YELLOW' | 'RED';
+}
+
+export interface FacebookApp {
+  id: string;
+  name: string; // e.g. "App Principal da Agência", "E-commerce Alpha Meta App"
+  appId: string; // Meta App ID e.g. "982736154819203"
+  appSecret?: string; // Meta App Secret e.g. "a8f9b2c3d4e5f6..."
+  appType: FacebookAppType;
+  status: FacebookAppStatus;
+  apiVersion: string; // e.g. "v21.0"
+  
+  // User & Tenant attribution
+  ownerUserId: string; // User ID who created/owns this app
+  ownerUserName?: string;
+  ownerUserEmail?: string;
+  tenantId: string; // Active Workspace ID
+  assignedUserIds: string[]; // ['all'] or list of user IDs allowed to manage
+  
+  // Meta Tokens & Webhook
+  systemUserToken?: string; // Permanent System User Token
+  verifyToken: string; // Webhook Verify Token
+  webhookCallbackUrl: string; // Full callback URL
+  isWebhookLive: boolean;
+  
+  // Assets connected through this App
+  pages: FacebookPageAsset[];
+  whatsAppAccounts: FacebookWhatsAppAsset[];
+  
+  // Permissions & Rate limits
+  approvedPermissions: string[]; // e.g. ["pages_messaging", "instagram_manage_messages", ...]
+  rateLimitUsagePercent: number; // 0-100%
+  isDefault: boolean; // Primary app for this user/tenant
+  
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  lastCheckedAt?: string;
+}
+
 // Production Readiness Checklist & Deployment Config Types
 export interface ProductionAuditItem {
   id: string;

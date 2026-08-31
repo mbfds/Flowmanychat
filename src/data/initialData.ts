@@ -1,4 +1,4 @@
-import { Flow, KeywordTrigger, PostCommentGrowthTool, Contact, LiveConversation, BotKnowledgeBase, MetaConnectionConfig, CustomFieldDefinition, BroadcastCampaign, UtilityMessageTemplate, ConnectedMetaAccount, MetaPostItem } from '../types';
+import { Flow, KeywordTrigger, PostCommentGrowthTool, Contact, LiveConversation, BotKnowledgeBase, MetaConnectionConfig, CustomFieldDefinition, BroadcastCampaign, UtilityMessageTemplate, ConnectedMetaAccount, MetaPostItem, FacebookApp } from '../types';
 
 export const INITIAL_FLOWS: Flow[] = [
   {
@@ -2196,5 +2196,175 @@ export const INITIAL_WEBHOOK_SETTINGS: import('../types').WebhookSettingsState =
     }
   ]
 };
+
+export const INITIAL_FACEBOOK_APPS: FacebookApp[] = [
+  {
+    id: "fb_app_master_01",
+    name: "ManyFlow Principal (Agência & Matriz)",
+    appId: "982736154819203",
+    appSecret: "a8f9b2c3d4e5f67a8b9c0d1e2f3a4b5c",
+    appType: "business",
+    status: "active",
+    apiVersion: "v21.0",
+    ownerUserId: "usr_super_1",
+    ownerUserName: "Administrador Principal",
+    ownerUserEmail: "admin@manyflow.com",
+    tenantId: "tenant_main",
+    assignedUserIds: ["all"],
+    systemUserToken: "EAAO9ZCYZBZC...system_user_token_permanent_active",
+    verifyToken: "manyflow_verify_token_secure_2026",
+    webhookCallbackUrl: "https://seu-dominio-aapanel.com/api/webhooks/meta-receive?app_id=982736154819203",
+    isWebhookLive: true,
+    pages: [
+      {
+        id: "108293849182390",
+        name: "ManyFlow Brasil - Automações",
+        category: "Software & Marketing",
+        followersCount: 14200,
+        instagramBusinessId: "178414019283746",
+        instagramUsername: "@manyflow.oficial",
+        instagramAvatarUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
+        pageAccessToken: "EAAB...page_token_encrypted",
+        isWebhookSubscribed: true,
+        tasks: ["MANAGE", "MESSAGING", "ANALYZE"]
+      },
+      {
+        id: "209182374619283",
+        name: "ManyFlow Suporte & Academy",
+        category: "Educação & Treinamento",
+        followersCount: 8400,
+        instagramBusinessId: "178414099887766",
+        instagramUsername: "@manyflow.academy",
+        instagramAvatarUrl: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=150&auto=format&fit=crop&q=80",
+        pageAccessToken: "EAAB...page_token_encrypted_2",
+        isWebhookSubscribed: true,
+        tasks: ["MESSAGING", "ANALYZE"]
+      }
+    ],
+    whatsAppAccounts: [
+      {
+        wabaId: "109283746192834",
+        phoneNumberId: "108374619283471",
+        displayPhoneNumber: "+55 11 99999-8888",
+        verifiedName: "ManyFlow Brasil",
+        qualityRating: "GREEN"
+      }
+    ],
+    approvedPermissions: [
+      "pages_messaging",
+      "instagram_manage_messages",
+      "pages_read_engagement",
+      "pages_manage_metadata",
+      "whatsapp_business_management",
+      "instagram_basic",
+      "leads_retrieval",
+      "public_profile"
+    ],
+    rateLimitUsagePercent: 14,
+    isDefault: true,
+    notes: "App de produção com Acesso Avançado (Advanced Access) aprovado pela Meta.",
+    createdAt: "2026-08-01T10:00:00Z",
+    updatedAt: "2026-08-29T18:00:00Z",
+    lastCheckedAt: "2026-08-30T17:00:00Z"
+  },
+  {
+    id: "fb_app_gestor_02",
+    name: "Agência Alpha - Clientes E-commerce",
+    appId: "748192039481273",
+    appSecret: "f7e6d5c4b3a21098f7e6d5c4b3a21098",
+    appType: "business",
+    status: "active",
+    apiVersion: "v21.0",
+    ownerUserId: "usr_mgr_2",
+    ownerUserName: "Carlos Oliveira (Gestor de Tráfego)",
+    ownerUserEmail: "gestor@agenciadigital.com",
+    tenantId: "tenant_main",
+    assignedUserIds: ["usr_mgr_2", "usr_super_1"],
+    systemUserToken: "EAAH7bK...system_user_token_alpha",
+    verifyToken: "alpha_agency_webhook_verify_2026",
+    webhookCallbackUrl: "https://seu-dominio-aapanel.com/api/webhooks/meta-receive?app_id=748192039481273",
+    isWebhookLive: true,
+    pages: [
+      {
+        id: "301928475610293",
+        name: "Bella Moda & Calçados",
+        category: "E-commerce / Moda",
+        followersCount: 29800,
+        instagramBusinessId: "178414055443322",
+        instagramUsername: "@bellamoda.calcados",
+        instagramAvatarUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=150&auto=format&fit=crop&q=80",
+        pageAccessToken: "EAAB...page_token_bella",
+        isWebhookSubscribed: true,
+        tasks: ["MESSAGING", "ADVERTISE", "ANALYZE"]
+      }
+    ],
+    whatsAppAccounts: [
+      {
+        wabaId: "203948571928374",
+        phoneNumberId: "201928374619283",
+        displayPhoneNumber: "+55 11 98765-4321",
+        verifiedName: "Bella Moda Atendimento",
+        qualityRating: "GREEN"
+      }
+    ],
+    approvedPermissions: [
+      "pages_messaging",
+      "instagram_manage_messages",
+      "pages_read_engagement",
+      "leads_retrieval",
+      "instagram_basic"
+    ],
+    rateLimitUsagePercent: 22,
+    isDefault: false,
+    notes: "App isolado para automações de vendas e recuperação de carrinho da Bella Moda.",
+    createdAt: "2026-08-15T14:30:00Z",
+    updatedAt: "2026-08-29T16:15:00Z",
+    lastCheckedAt: "2026-08-30T16:45:00Z"
+  },
+  {
+    id: "fb_app_suporte_03",
+    name: "App Suporte & Atendimento Imobiliário",
+    appId: "519283746102938",
+    appSecret: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8",
+    appType: "business",
+    status: "development",
+    apiVersion: "v21.0",
+    ownerUserId: "usr_agt_3",
+    ownerUserName: "Mariana Souza (Suporte Live Chat)",
+    ownerUserEmail: "suporte@atendimento.com",
+    tenantId: "tenant_main",
+    assignedUserIds: ["usr_agt_3", "usr_super_1"],
+    systemUserToken: "EAAD8xZ...token_imob_sandbox",
+    verifyToken: "imob_suporte_verify_token_2026",
+    webhookCallbackUrl: "https://seu-dominio-aapanel.com/api/webhooks/meta-receive?app_id=519283746102938",
+    isWebhookLive: false,
+    pages: [
+      {
+        id: "401928374619283",
+        name: "Prime Imóveis & Investimentos",
+        category: "Imobiliária / Construção",
+        followersCount: 5200,
+        instagramBusinessId: "178414011223344",
+        instagramUsername: "@prime.imoveis.sp",
+        instagramAvatarUrl: "https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=150&auto=format&fit=crop&q=80",
+        pageAccessToken: "EAAB...page_token_prime",
+        isWebhookSubscribed: false,
+        tasks: ["MESSAGING"]
+      }
+    ],
+    whatsAppAccounts: [],
+    approvedPermissions: [
+      "pages_messaging",
+      "pages_read_engagement",
+      "public_profile"
+    ],
+    rateLimitUsagePercent: 3,
+    isDefault: false,
+    notes: "App em modo de desenvolvimento (Sandbox) para testes de triagem e agendamento de visitas.",
+    createdAt: "2026-08-22T09:00:00Z",
+    updatedAt: "2026-08-28T11:00:00Z",
+    lastCheckedAt: "2026-08-30T15:20:00Z"
+  }
+];
 
 

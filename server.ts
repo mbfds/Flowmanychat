@@ -3938,6 +3938,283 @@ app.delete("/api/auth/users/:id", async (req, res) => {
 });
 
 // ============================================================================
+// --- MULTI-APP FACEBOOK / META DEVELOPER APPS ENDPOINTS ---
+// ============================================================================
+
+// Memory store fallback for Facebook Apps
+let inMemoryFacebookApps: any[] = [
+  {
+    id: "fb_app_master_01",
+    name: "ManyFlow Principal (Agência & Matriz)",
+    appId: "982736154819203",
+    appSecret: "a8f9b2c3d4e5f67a8b9c0d1e2f3a4b5c",
+    appType: "business",
+    status: "active",
+    apiVersion: "v21.0",
+    ownerUserId: "usr_super_1",
+    ownerUserName: "Administrador Principal",
+    ownerUserEmail: "admin@manyflow.com",
+    tenantId: "tenant_main",
+    assignedUserIds: ["all"],
+    systemUserToken: "EAAO9ZCYZBZC...system_user_token_permanent_active",
+    verifyToken: "manyflow_verify_token_secure_2026",
+    webhookCallbackUrl: "https://seu-dominio-aapanel.com/api/webhooks/meta-receive?app_id=982736154819203",
+    isWebhookLive: true,
+    pages: [
+      {
+        id: "108293849182390",
+        name: "ManyFlow Brasil - Automações",
+        category: "Software & Marketing",
+        followersCount: 14200,
+        instagramBusinessId: "178414019283746",
+        instagramUsername: "@manyflow.oficial",
+        instagramAvatarUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
+        pageAccessToken: "EAAB...page_token_encrypted",
+        isWebhookSubscribed: true,
+        tasks: ["MANAGE", "MESSAGING", "ANALYZE"]
+      }
+    ],
+    whatsAppAccounts: [
+      {
+        wabaId: "109283746192834",
+        phoneNumberId: "108374619283471",
+        displayPhoneNumber: "+55 11 99999-8888",
+        verifiedName: "ManyFlow Brasil",
+        qualityRating: "GREEN"
+      }
+    ],
+    approvedPermissions: [
+      "pages_messaging",
+      "instagram_manage_messages",
+      "pages_read_engagement",
+      "pages_manage_metadata",
+      "whatsapp_business_management",
+      "instagram_basic",
+      "leads_retrieval",
+      "public_profile"
+    ],
+    rateLimitUsagePercent: 14,
+    isDefault: true,
+    createdAt: "2026-08-01T10:00:00Z",
+    updatedAt: "2026-08-29T18:00:00Z",
+    lastCheckedAt: "2026-08-30T17:00:00Z"
+  },
+  {
+    id: "fb_app_gestor_02",
+    name: "Agência Alpha - Clientes E-commerce",
+    appId: "748192039481273",
+    appSecret: "f7e6d5c4b3a21098f7e6d5c4b3a21098",
+    appType: "business",
+    status: "active",
+    apiVersion: "v21.0",
+    ownerUserId: "usr_mgr_2",
+    ownerUserName: "Carlos Oliveira (Gestor de Tráfego)",
+    ownerUserEmail: "gestor@agenciadigital.com",
+    tenantId: "tenant_main",
+    assignedUserIds: ["usr_mgr_2", "usr_super_1"],
+    systemUserToken: "EAAH7bK...system_user_token_alpha",
+    verifyToken: "alpha_agency_webhook_verify_2026",
+    webhookCallbackUrl: "https://seu-dominio-aapanel.com/api/webhooks/meta-receive?app_id=748192039481273",
+    isWebhookLive: true,
+    pages: [
+      {
+        id: "301928475610293",
+        name: "Bella Moda & Calçados",
+        category: "E-commerce / Moda",
+        followersCount: 29800,
+        instagramBusinessId: "178414055443322",
+        instagramUsername: "@bellamoda.calcados",
+        instagramAvatarUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=150&auto=format&fit=crop&q=80",
+        pageAccessToken: "EAAB...page_token_bella",
+        isWebhookSubscribed: true,
+        tasks: ["MESSAGING", "ADVERTISE", "ANALYZE"]
+      }
+    ],
+    whatsAppAccounts: [],
+    approvedPermissions: [
+      "pages_messaging",
+      "instagram_manage_messages",
+      "pages_read_engagement",
+      "leads_retrieval",
+      "instagram_basic"
+    ],
+    rateLimitUsagePercent: 22,
+    isDefault: false,
+    createdAt: "2026-08-15T14:30:00Z",
+    updatedAt: "2026-08-29T16:15:00Z",
+    lastCheckedAt: "2026-08-30T16:45:00Z"
+  }
+];
+
+// 1. GET /api/facebook-apps - List apps (scoped by tenant and user)
+app.get("/api/facebook-apps", async (req, res) => {
+  try {
+    const { tenantId, userId } = req.query;
+    const db = await getDb();
+    
+    if (db) {
+      const query: any = {};
+      if (tenantId) query.tenantId = tenantId;
+      if (userId) {
+        query.$or = [
+          { ownerUserId: userId },
+          { assignedUserIds: "all" },
+          { assignedUserIds: userId }
+        ];
+      }
+      const apps = await db.collection("facebook_apps").find(query).sort({ isDefault: -1, updatedAt: -1 }).toArray();
+      if (apps.length > 0) {
+        return res.json(apps);
+      }
+    }
+
+    // Return in-memory fallback
+    let apps = inMemoryFacebookApps;
+    if (tenantId) {
+      apps = apps.filter(a => !a.tenantId || a.tenantId === tenantId);
+    }
+    if (userId) {
+      apps = apps.filter(a => 
+        a.ownerUserId === userId || 
+        a.assignedUserIds.includes("all") || 
+        a.assignedUserIds.includes(userId as string)
+      );
+    }
+    res.json(apps);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. GET /api/facebook-apps/:id - Get single app
+app.get("/api/facebook-apps/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      const app = await db.collection("facebook_apps").findOne({ id });
+      if (app) return res.json(app);
+    }
+    const app = inMemoryFacebookApps.find(a => a.id === id);
+    if (!app) return res.status(404).json({ error: "App não encontrado" });
+    res.json(app);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. POST /api/facebook-apps - Create new app
+app.post("/api/facebook-apps", async (req, res) => {
+  try {
+    const newApp = req.body;
+    newApp.id = newApp.id || `fb_app_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    newApp.createdAt = newApp.createdAt || new Date().toISOString();
+    newApp.updatedAt = new Date().toISOString();
+    newApp.rateLimitUsagePercent = newApp.rateLimitUsagePercent || Math.floor(Math.random() * 15) + 5;
+
+    const db = await getDb();
+    if (db) {
+      if (newApp.isDefault) {
+        await db.collection("facebook_apps").updateMany(
+          { tenantId: newApp.tenantId },
+          { $set: { isDefault: false } }
+        );
+      }
+      await db.collection("facebook_apps").insertOne(newApp);
+    }
+
+    if (newApp.isDefault) {
+      inMemoryFacebookApps.forEach(a => {
+        if (a.tenantId === newApp.tenantId) a.isDefault = false;
+      });
+    }
+    inMemoryFacebookApps.unshift(newApp);
+
+    res.status(201).json({ success: true, app: newApp });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. PUT /api/facebook-apps/:id - Update app
+app.put("/api/facebook-apps/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    updates.updatedAt = new Date().toISOString();
+
+    const db = await getDb();
+    if (db) {
+      if (updates.isDefault) {
+        const current = await db.collection("facebook_apps").findOne({ id });
+        if (current) {
+          await db.collection("facebook_apps").updateMany(
+            { tenantId: current.tenantId, id: { $ne: id } },
+            { $set: { isDefault: false } }
+          );
+        }
+      }
+      await db.collection("facebook_apps").updateOne({ id }, { $set: updates });
+    }
+
+    const index = inMemoryFacebookApps.findIndex(a => a.id === id);
+    if (index !== -1) {
+      if (updates.isDefault) {
+        inMemoryFacebookApps.forEach(a => {
+          if (a.tenantId === inMemoryFacebookApps[index].tenantId && a.id !== id) {
+            a.isDefault = false;
+          }
+        });
+      }
+      inMemoryFacebookApps[index] = { ...inMemoryFacebookApps[index], ...updates };
+    }
+
+    res.json({ success: true, message: "App atualizado com sucesso" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5. DELETE /api/facebook-apps/:id - Delete app
+app.delete("/api/facebook-apps/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      await db.collection("facebook_apps").deleteOne({ id });
+    }
+    inMemoryFacebookApps = inMemoryFacebookApps.filter(a => a.id !== id);
+    res.json({ success: true, message: "App removido com sucesso" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 6. POST /api/facebook-apps/:id/set-default - Set default app
+app.post("/api/facebook-apps/:id/set-default", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      const app = await db.collection("facebook_apps").findOne({ id });
+      if (app) {
+        await db.collection("facebook_apps").updateMany({ tenantId: app.tenantId }, { $set: { isDefault: false } });
+        await db.collection("facebook_apps").updateOne({ id }, { $set: { isDefault: true, updatedAt: new Date().toISOString() } });
+      }
+    }
+    const target = inMemoryFacebookApps.find(a => a.id === id);
+    if (target) {
+      inMemoryFacebookApps.forEach(a => {
+        if (a.tenantId === target.tenantId) a.isDefault = a.id === id;
+      });
+    }
+    res.json({ success: true, message: "App definido como padrão" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
 // --- PRODUCTION READINESS & SYSTEM PRE-FLIGHT AUDIT ENDPOINT ---
 // ============================================================================
 

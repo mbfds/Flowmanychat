@@ -35,6 +35,7 @@ import { FacebookRateLimitMonitor } from './FacebookRateLimitMonitor';
 import { DomainManager } from './DomainManager';
 import { ProductionDeployHub } from './ProductionDeployHub';
 import { TeamUserManager } from './TeamUserManager';
+import { FacebookAppsManager } from './FacebookAppsManager';
 import { Users } from 'lucide-react';
 
 interface SettingsHubProps {
@@ -58,7 +59,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   onOpenFlow,
   onOpenLiveChat
 }) => {
-  const [activeTab, setActiveTab] = useState<'production' | 'domains' | 'team' | 'rate_limits' | 'webhook_logs' | 'webhooks' | 'custom_fields' | 'database' | 'meta_ai'>('production');
+  const [activeTab, setActiveTab] = useState<'production' | 'fb_apps' | 'domains' | 'team' | 'rate_limits' | 'webhook_logs' | 'webhooks' | 'custom_fields' | 'database' | 'meta_ai'>('fb_apps');
   const [formData, setFormData] = useState<BotKnowledgeBase>(knowledgeBase);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -95,6 +96,22 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
 
       {/* Tabs Navigation */}
       <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-1 overflow-x-auto">
+        <button
+          id="tab_settings_fb_apps"
+          onClick={() => setActiveTab('fb_apps')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'fb_apps'
+              ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-lg'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Facebook className="w-4 h-4 text-blue-600" />
+          <span>Apps Meta / Facebook (Multi-App)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-900">
+            Multi-Contas
+          </span>
+        </button>
+
         <button
           id="tab_settings_production"
           onClick={() => setActiveTab('production')}
@@ -232,6 +249,11 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           <span>Conexões Meta & IA</span>
         </button>
       </div>
+
+      {/* Tab: MULTI-APP FACEBOOK / META DEVELOPER APPS */}
+      {activeTab === 'fb_apps' && (
+        <FacebookAppsManager />
+      )}
 
       {/* Tab: PRODUCTION DEPLOY & AUDIT */}
       {activeTab === 'production' && (
