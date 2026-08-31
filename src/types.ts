@@ -1,6 +1,6 @@
 export type ChannelType = 'instagram' | 'messenger' | 'whatsapp' | 'telegram' | 'omnichannel';
 
-export type NavigationTab = 'flows' | 'triggers' | 'comment_tools' | 'broadcast' | 'inbox' | 'contacts' | 'analytics' | 'whatsapp_groups' | 'settings';
+export type NavigationTab = 'flows' | 'triggers' | 'comment_tools' | 'broadcast' | 'inbox' | 'contacts' | 'analytics' | 'whatsapp_groups' | 'settings' | 'ab_testing';
 
 export type NodeType = 'trigger' | 'message' | 'condition' | 'action' | 'ai_step' | 'delay' | 'ab_split';
 

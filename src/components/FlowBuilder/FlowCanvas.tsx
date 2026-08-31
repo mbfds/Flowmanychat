@@ -19,12 +19,15 @@ import {
   Split,
   Tag,
   Clock,
-  Layers
+  Layers,
+  TrendingUp,
+  BarChart2
 } from 'lucide-react';
 import { Flow, FlowNode, FlowConnection, NodeType, CustomFieldDefinition } from '../../types';
 import { FlowNodeCard } from './FlowNodeCard';
 import { NodeInspectorDrawer } from './NodeInspectorDrawer';
 import { VoiceToFlowModal } from './VoiceToFlowModal';
+import { FlowPerformanceOverlay } from './FlowPerformanceOverlay';
 
 interface FlowCanvasProps {
   flow: Flow;
@@ -46,6 +49,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
   const [isSaved, setIsSaved] = useState(false);
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [showPerformanceOverlay, setShowPerformanceOverlay] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.15, 1.6));
@@ -227,12 +231,23 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
-          {/* Quick Stats Pill */}
-          <div className="hidden xl:flex items-center gap-3 px-3 py-1 rounded-md bg-[#F8F9FB] border border-[#E2E8F0] text-xs text-[#64748B]">
-            <span>Execuções: <strong className="text-[#1A1D21]">{flow.stats.runs}</strong></span>
-            <span className="text-gray-300">•</span>
-            <span>CTR: <strong className="text-emerald-600">{flow.stats.ctr}%</strong></span>
-          </div>
+          {/* Quick Stats Pill with Performance Overlay Toggle */}
+          <button
+            id="btn_toggle_performance_overlay"
+            onClick={() => setShowPerformanceOverlay(!showPerformanceOverlay)}
+            className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold transition-all cursor-pointer shadow-xs ${
+              showPerformanceOverlay 
+                ? 'bg-blue-600 text-white border-blue-700 shadow-blue-500/20' 
+                : 'bg-[#F8F9FB] hover:bg-slate-100 border-[#E2E8F0] text-[#1A1D21]'
+            }`}
+            title="Abrir Gráfico de Performance e Métricas em Tempo Real"
+          >
+            <TrendingUp className={`w-3.5 h-3.5 ${showPerformanceOverlay ? 'text-white' : 'text-blue-600'}`} />
+            <span>Métricas: <strong className={showPerformanceOverlay ? 'text-white' : 'text-emerald-600'}>{flow.stats.ctr}% CTR</strong></span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${showPerformanceOverlay ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700'}`}>
+              {showPerformanceOverlay ? 'Ocultar' : 'Gráfico'}
+            </span>
+          </button>
 
           {/* Voice-to-Flow Builder Button */}
           <button
@@ -479,6 +494,14 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
           onClose={() => setSelectedNode(null)}
           onUpdateNode={handleUpdateNode}
           customFields={customFields}
+        />
+      )}
+
+      {/* Interactive Performance Overlay Widget with Recharts */}
+      {showPerformanceOverlay && (
+        <FlowPerformanceOverlay
+          flow={flow}
+          onClose={() => setShowPerformanceOverlay(false)}
         />
       )}
 

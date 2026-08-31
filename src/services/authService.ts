@@ -4,6 +4,38 @@ const TOKEN_KEY = 'manyflow_auth_token';
 const USER_KEY = 'manyflow_auth_user';
 const TENANT_KEY = 'manyflow_auth_tenant';
 
+export const DEFAULT_USER: User = {
+  id: 'usr_admin_01',
+  name: 'Administrador',
+  email: 'admin@manyflow.io',
+  role: 'super_admin',
+  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  tenantId: 'tenant_main',
+  allowedTenants: ['tenant_main'],
+  isActive: true,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+};
+
+export const DEFAULT_TENANT: Tenant = {
+  id: 'tenant_main',
+  name: 'Workspace Principal',
+  slug: 'principal',
+  plan: 'enterprise',
+  maxContacts: 100000,
+  maxFlows: 500,
+  maxUsers: 50,
+  ownerId: 'usr_admin_01',
+  isActive: true,
+  domains: [],
+  branding: {
+    brandName: 'ManyFlow',
+    primaryColor: '#0084FF'
+  },
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+};
+
 export const authService = {
   getToken(): string | null {
     return localStorage.getItem(TOKEN_KEY);

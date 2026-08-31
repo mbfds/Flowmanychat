@@ -25,6 +25,9 @@ const ContactsCRM = lazy(() =>
 const AnalyticsDashboard = lazy(() =>
   import('./components/Analytics/AnalyticsDashboard').then((m) => ({ default: m.AnalyticsDashboard }))
 );
+const ABTestingModule = lazy(() =>
+  import('./components/ABTesting/ABTestingModule').then((m) => ({ default: m.ABTestingModule }))
+);
 const WhatsAppGroupDashboard = lazy(() =>
   import('./components/WhatsAppGroups/WhatsAppGroupDashboard').then((m) => ({ default: m.WhatsAppGroupDashboard }))
 );
@@ -45,9 +48,6 @@ const LoginPage = lazy(() =>
 );
 const HomePage = lazy(() =>
   import('./components/Home/HomePage').then((m) => ({ default: m.HomePage }))
-);
-const MasterSecurityModal = lazy(() =>
-  import('./components/Auth/MasterSecurityModal').then((m) => ({ default: m.MasterSecurityModal }))
 );
 const UserProfileModal = lazy(() =>
   import('./components/Auth/UserProfileModal').then((m) => ({ default: m.UserProfileModal }))
@@ -70,9 +70,9 @@ import { NavigationTab, Flow, KeywordTrigger, PostCommentGrowthTool, LiveConvers
 function MainApp() {
   const { user, tenant, isAuthenticated } = useAuth();
 
-  // Public Landing / Auth State
-  const [authMode, setAuthMode] = useState<'home' | 'login' | 'register' | 'master'>('home');
-  const [isMasterModalOpen, setIsMasterModalOpen] = useState(false);
+  // Public Landing / Workspace View State (defaults to HomePage so user stays on landing page on load)
+  const [isInWorkspace, setIsInWorkspace] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<'home' | 'login' | 'register'>('home');
 
   // Navigation & View state
   const [currentTab, setCurrentTab] = useState<NavigationTab>('flows');
@@ -227,33 +227,26 @@ function MainApp() {
     }
   };
 
-  // If NOT authenticated, render public Landing Page (Home) or Login/Register/Master portal
-  if (!isAuthenticated) {
+  // If NOT in workspace view, render public Landing Page (Home) or Login/Register portal
+  if (!isInWorkspace) {
     return (
       <div className="min-h-screen w-screen overflow-x-hidden font-sans">
         <Suspense fallback={<ComponentLoader label="Carregando ManyFlow..." />}>
           {authMode === 'home' ? (
             <HomePage
+              onGoToApp={() => setIsInWorkspace(true)}
               onOpenLogin={() => setAuthMode('login')}
               onOpenRegister={() => setAuthMode('register')}
-              onOpenMasterModal={() => setIsMasterModalOpen(true)}
               onOpenDemo={() => setIsSimulatorOpen(true)}
             />
           ) : (
             <LoginPage
               initialMode={authMode}
               onBackToHome={() => setAuthMode('home')}
-              onOpenMasterLogin={() => setAuthMode('master')}
-              onSuccess={() => setAuthMode('home')}
-            />
-          )}
-
-          {/* Master Password Emergency Modal */}
-          {isMasterModalOpen && (
-            <MasterSecurityModal
-              isOpen={isMasterModalOpen}
-              onClose={() => setIsMasterModalOpen(false)}
-              onSuccessLogin={() => setAuthMode('home')}
+              onSuccess={() => {
+                setAuthMode('home');
+                setIsInWorkspace(true);
+              }}
             />
           )}
 
@@ -285,6 +278,7 @@ function MainApp() {
         onOpenSimulator={() => setIsSimulatorOpen(true)}
         onOpenLoginModal={() => setIsLoginModalOpen(true)}
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
+        onGoToHome={() => setIsInWorkspace(false)}
       />
 
       {/* Main Content Workspace */}
@@ -391,6 +385,21 @@ function MainApp() {
               />
             )}
 
+            {currentTab === 'ab_testing' && (
+              <ABTestingModule
+                flows={flows}
+                onOpenFlow={(flowId) => {
+                  setSelectedFlowId(flowId);
+                  setCurrentTab('flows');
+                }}
+                onOpenSimulator={(flowId) => {
+                  if (flowId) setSelectedFlowId(flowId);
+                  setIsSimulatorOpen(true);
+                }}
+                onUpdateFlow={handleUpdateFlow}
+              />
+            )}
+
             {currentTab === 'whatsapp_groups' && (
               <WhatsAppGroupDashboard
                 onOpenSimulator={(flowId) => {
@@ -451,16 +460,6 @@ function MainApp() {
             isOpen={isProfileModalOpen}
             onClose={() => setIsProfileModalOpen(false)}
             onOpenLoginModal={() => setIsLoginModalOpen(true)}
-          />
-        </Suspense>
-      )}
-
-      {/* Master Security Root Modal */}
-      {isMasterModalOpen && (
-        <Suspense fallback={null}>
-          <MasterSecurityModal
-            isOpen={isMasterModalOpen}
-            onClose={() => setIsMasterModalOpen(false)}
           />
         </Suspense>
       )}

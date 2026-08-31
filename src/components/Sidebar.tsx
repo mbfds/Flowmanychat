@@ -22,7 +22,8 @@ import {
   MessageCircle,
   Send,
   DollarSign,
-  Layers
+  Layers,
+  Split
 } from 'lucide-react';
 import { NavigationTab, ChannelType } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -36,6 +37,7 @@ interface SidebarProps {
   onOpenSimulator?: () => void;
   onOpenLoginModal?: () => void;
   onOpenProfileModal?: () => void;
+  onGoToHome?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -46,7 +48,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectChannel,
   onOpenSimulator,
   onOpenLoginModal,
-  onOpenProfileModal
+  onOpenProfileModal,
+  onGoToHome
 }) => {
   const { user, tenant, tenants, switchTenant, logout } = useAuth();
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
@@ -58,8 +61,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'flows' as NavigationTab, label: 'Fluxos de Automação', icon: GitFork, badge: '5 ativos' },
     { id: 'triggers' as NavigationTab, label: 'Gatilhos & Palavras-Chave', icon: Zap, badge: '4' },
     { id: 'comment_tools' as NavigationTab, label: 'Comentário ➔ Direct', icon: MessageSquareReply, badge: 'Reels & Posts' },
-    { id: 'whatsapp_groups' as NavigationTab, label: 'Grupos WhatsApp VIP', icon: Users, badge: 'R$ 243k', highlight: true },
-    { id: 'broadcast' as NavigationTab, label: 'Transmissão (Broadcast)', icon: Radio, badge: 'Novo' },
+    { id: 'ab_testing' as NavigationTab, label: 'Testes A/B Comparador', icon: Split, badge: 'Novo', highlight: true },
+    { id: 'whatsapp_groups' as NavigationTab, label: 'Grupos WhatsApp VIP', icon: Users, badge: 'R$ 243k' },
+    { id: 'broadcast' as NavigationTab, label: 'Transmissão (Broadcast)', icon: Radio },
     { id: 'inbox' as NavigationTab, label: 'Atendimento ao Vivo', icon: Inbox, badge: unreadConversationsCount > 0 ? `${unreadConversationsCount}` : undefined, highlight: unreadConversationsCount > 0 },
     { id: 'contacts' as NavigationTab, label: 'Audiência & CRM', icon: Users, badge: '4.2k' },
     { id: 'analytics' as NavigationTab, label: 'Métricas & Conversão', icon: BarChart3 },
@@ -311,6 +315,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <Smartphone className="w-3.5 h-3.5" />
             <span>Simulador Mobile</span>
+          </button>
+        )}
+
+        {/* Return to Home / Landing Page */}
+        {onGoToHome && (
+          <button
+            id="btn_back_to_home_sidebar"
+            onClick={onGoToHome}
+            className="w-full py-1.5 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-2xs"
+          >
+            <Globe className="w-3.5 h-3.5 text-blue-500" />
+            <span>Ver Página Inicial</span>
           </button>
         )}
       </div>

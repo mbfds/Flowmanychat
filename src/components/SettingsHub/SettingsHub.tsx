@@ -24,7 +24,11 @@ import {
   Radio,
   Globe,
   Rocket,
-  MessageCircle
+  MessageCircle,
+  Users,
+  FileText,
+  RotateCcw,
+  Server
 } from 'lucide-react';
 import { BotKnowledgeBase, CustomFieldDefinition, WebhookSettingsState } from '../../types';
 import { CustomFieldsManager } from './CustomFieldsManager';
@@ -38,12 +42,10 @@ import { TeamUserManager } from './TeamUserManager';
 import { FacebookAppsManager } from './FacebookAppsManager';
 import { ActivityLogsViewer } from './ActivityLogsViewer';
 import { WebhookSubscriptions } from './WebhookSubscriptions';
-import { MasterSecurityManager } from './MasterSecurityManager';
 import { ExternalMessageWebhooksManager } from './ExternalMessageWebhooksManager';
 import { WebhookSignatureTool } from './WebhookSignatureTool';
 import { WebhookRetryPolicyManager } from './WebhookRetryPolicyManager';
 import { FacebookGraphApiManager } from './FacebookGraphApiManager';
-import { Users, FileText, KeyRound, RotateCcw } from 'lucide-react';
 
 interface SettingsHubProps {
   knowledgeBase: BotKnowledgeBase;
@@ -66,7 +68,14 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   onOpenFlow,
   onOpenLiveChat
 }) => {
-  const [activeTab, setActiveTab] = useState<'master_security' | 'facebook_graph' | 'webhook_retries' | 'webhook_signatures' | 'external_message_webhooks' | 'activity_logs' | 'webhook_subscriptions' | 'production' | 'fb_apps' | 'domains' | 'team' | 'rate_limits' | 'webhook_logs' | 'webhooks' | 'custom_fields' | 'database' | 'meta_ai'>('facebook_graph');
+  // Main simplified categories: 7 intuitive tabs for laypeople
+  const [activeTab, setActiveTab] = useState<'facebook' | 'webhooks' | 'domains' | 'custom_fields' | 'team' | 'meta_ai' | 'system'>('facebook');
+  
+  // Secondary sub-tab states for cleaner navigation
+  const [facebookSubTab, setFacebookSubTab] = useState<'graph_api' | 'apps'>('graph_api');
+  const [webhooksSubTab, setWebhooksSubTab] = useState<'config' | 'events' | 'callbacks' | 'signatures' | 'retries' | 'logs'>('config');
+  const [systemSubTab, setSystemSubTab] = useState<'database' | 'deploy' | 'rate_limits' | 'audit'>('database');
+
   const [formData, setFormData] = useState<BotKnowledgeBase>(knowledgeBase);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -83,10 +92,10 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         <div>
           <h2 className="text-lg font-bold text-[#1A1D21] flex items-center gap-2">
             <Settings className="w-5 h-5 text-[#64748B]" />
-            <span>Configurações, Multi-Domínio & Produção</span>
+            <span>Configurações & Conexões</span>
           </h2>
           <p className="text-xs text-[#64748B]">
-            Gerencie múltiplos domínios em servidor único, logs de webhooks em tempo real, banco MongoDB, deploy para aaPanel e cotas Meta API.
+            Gerencie páginas do Facebook/Instagram, webhooks de mensagens, equipe, domínios e inteligência artificial de forma simples.
           </p>
         </div>
 
@@ -101,167 +110,21 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         )}
       </div>
 
-      {/* Tabs Navigation */}
+      {/* Primary Tabs Navigation (Simplified 7 Essential Tabs) */}
       <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-1 overflow-x-auto">
         <button
-          id="tab_settings_master_security"
-          onClick={() => setActiveTab('master_security')}
+          id="tab_settings_facebook"
+          onClick={() => setActiveTab('facebook')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'master_security'
-              ? 'border-amber-500 text-amber-900 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/40 rounded-t-lg font-black'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <KeyRound className="w-4 h-4 text-amber-500" />
-          <span>Segurança Master & Senha Central</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">
-            Root Admin
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_facebook_graph"
-          onClick={() => setActiveTab('facebook_graph')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'facebook_graph'
-              ? 'border-blue-600 text-blue-900 dark:text-blue-200 bg-blue-50/80 dark:bg-blue-950/40 rounded-t-lg font-black'
+            activeTab === 'facebook'
+              ? 'border-blue-600 text-blue-900 dark:text-blue-200 bg-blue-50/80 rounded-t-lg font-black'
               : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
           }`}
         >
           <Facebook className="w-4 h-4 text-blue-600" />
-          <span>Facebook Graph API (Páginas & Tokens)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-900 border border-blue-300">
-            v21.0 Oficial
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_webhook_retries"
-          onClick={() => setActiveTab('webhook_retries')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'webhook_retries'
-              ? 'border-indigo-600 text-indigo-900 dark:text-indigo-200 bg-indigo-50/80 dark:bg-indigo-950/40 rounded-t-lg font-black'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <RotateCcw className="w-4 h-4 text-indigo-600" />
-          <span>Políticas de Retry (Backoff & DLQ)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-300">
-            Resiliência
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_webhook_signatures"
-          onClick={() => setActiveTab('webhook_signatures')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'webhook_signatures'
-              ? 'border-emerald-600 text-emerald-800 bg-emerald-50/70 rounded-t-lg font-black'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          <span>Assinatura & Secret (Validação HMAC)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-            Genuinidade
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_external_message_webhooks"
-          onClick={() => setActiveTab('external_message_webhooks')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'external_message_webhooks'
-              ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-lg font-black'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Radio className="w-4 h-4 text-blue-600 animate-pulse" />
-          <span>Webhooks & Callbacks Externos</span>
+          <span>Facebook & Instagram</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-900 border border-blue-200">
-            Recepção de Mensagens
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_activity_logs"
-          onClick={() => setActiveTab('activity_logs')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'activity_logs'
-              ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-lg'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Activity className="w-4 h-4 text-blue-600" />
-          <span>Logs de Atividade (Auditoria)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Audit Trail
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_webhook_subscriptions"
-          onClick={() => setActiveTab('webhook_subscriptions')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'webhook_subscriptions'
-              ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50 rounded-t-lg'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Webhook className="w-4 h-4 text-indigo-600" />
-          <span>Subscrições de Webhook</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-900">
-            Event-Driven
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_fb_apps"
-          onClick={() => setActiveTab('fb_apps')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'fb_apps'
-              ? 'border-blue-600 text-blue-700 bg-blue-50/50 rounded-t-lg'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Facebook className="w-4 h-4 text-blue-600" />
-          <span>Apps Meta / Facebook (Multi-App)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-900">
-            Multi-Contas
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_production"
-          onClick={() => setActiveTab('production')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'production'
-              ? 'border-emerald-600 text-emerald-700 bg-emerald-50/50 rounded-t-lg'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Rocket className="w-4 h-4 text-emerald-600" />
-          <span>Deploy & Produção (aaPanel)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-900">
-            98% Pronto
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_webhook_logs"
-          onClick={() => setActiveTab('webhook_logs')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'webhook_logs'
-              ? 'border-[#0084FF] text-[#0084FF] bg-blue-50/50 rounded-t-lg'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Terminal className="w-4 h-4 text-[#0084FF]" />
-          <span>Logs de Webhook (Tempo Real)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Ao Vivo
+            Graph API v21.0
           </span>
         </button>
 
@@ -270,28 +133,15 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           onClick={() => setActiveTab('webhooks')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'webhooks'
-              ? 'border-[#0084FF] text-[#0084FF]'
+              ? 'border-indigo-600 text-indigo-900 bg-indigo-50/80 rounded-t-lg font-black'
               : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
           }`}
         >
-          <Webhook className="w-4 h-4 text-blue-600" />
-          <span>Webhooks Meta (Configuração)</span>
-        </button>
-
-        <button
-          id="tab_settings_rate_limits"
-          onClick={() => setActiveTab('rate_limits')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'rate_limits'
-              ? 'border-indigo-600 text-indigo-600'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Activity className="w-4 h-4 text-indigo-600" />
-          <span>Monitor de Rate Limits (Meta API)</span>
+          <Webhook className="w-4 h-4 text-indigo-600" />
+          <span>Webhooks & Notificações</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            14% Seguro
+            Ativo
           </span>
         </button>
 
@@ -300,14 +150,27 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           onClick={() => setActiveTab('domains')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'domains'
-              ? 'border-blue-600 text-blue-600'
+              ? 'border-blue-600 text-blue-800 bg-blue-50/70 rounded-t-lg font-black'
               : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
           }`}
         >
           <Globe className="w-4 h-4 text-blue-600" />
-          <span>Domínios & Multi-Tenant</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800">
-            1 Banco Único
+          <span>Domínios & Marca</span>
+        </button>
+
+        <button
+          id="tab_settings_custom_fields"
+          onClick={() => setActiveTab('custom_fields')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'custom_fields'
+              ? 'border-purple-600 text-purple-900 bg-purple-50/70 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Variable className="w-4 h-4 text-purple-600" />
+          <span>Campos do CRM</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+            {customFields.length}
           </span>
         </button>
 
@@ -316,44 +179,12 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           onClick={() => setActiveTab('team')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'team'
-              ? 'border-indigo-600 text-indigo-600'
+              ? 'border-indigo-600 text-indigo-800 bg-indigo-50/70 rounded-t-lg font-black'
               : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
           }`}
         >
           <Users className="w-4 h-4 text-indigo-600" />
-          <span>Equipe & Permissões (RBAC)</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800">
-            Multi-User
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_custom_fields"
-          onClick={() => setActiveTab('custom_fields')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'custom_fields'
-              ? 'border-[#0084FF] text-[#0084FF]'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Variable className="w-4 h-4" />
-          <span>Campos Personalizados</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
-            {customFields.length}
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_database"
-          onClick={() => setActiveTab('database')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'database'
-              ? 'border-[#0084FF] text-[#0084FF]'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Database className="w-4 h-4 text-indigo-600" />
-          <span>MongoDB & Pooler</span>
+          <span>Equipe & Permissões</span>
         </button>
 
         <button
@@ -361,84 +192,158 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           onClick={() => setActiveTab('meta_ai')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'meta_ai'
-              ? 'border-[#0084FF] text-[#0084FF]'
+              ? 'border-purple-600 text-purple-800 bg-purple-50/70 rounded-t-lg font-black'
               : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
           }`}
         >
-          <ShieldCheck className="w-4 h-4" />
-          <span>Conexões Meta & IA</span>
+          <Sparkles className="w-4 h-4 text-purple-600" />
+          <span>Inteligência Artificial (IA)</span>
+        </button>
+
+        <button
+          id="tab_settings_system"
+          onClick={() => setActiveTab('system')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'system'
+              ? 'border-slate-800 text-slate-900 bg-slate-100 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Server className="w-4 h-4 text-slate-700" />
+          <span>Servidor & Sistema</span>
         </button>
       </div>
 
-      {/* Tab: MASTER SECURITY MANAGER (ROOT ACCESS & LOCKDOWN) */}
-      {activeTab === 'master_security' && (
-        <MasterSecurityManager />
+      {/* 1. TAB: FACEBOOK & INSTAGRAM */}
+      {activeTab === 'facebook' && (
+        <div className="space-y-4">
+          {/* Sub-selector */}
+          <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 w-fit">
+            <button
+              onClick={() => setFacebookSubTab('graph_api')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                facebookSubTab === 'graph_api'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Páginas & Tokens Oficiais (Graph API)
+            </button>
+            <button
+              onClick={() => setFacebookSubTab('apps')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                facebookSubTab === 'apps'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Aplicativos Meta (App IDs & Secrets)
+            </button>
+          </div>
+
+          {facebookSubTab === 'graph_api' ? (
+            <FacebookGraphApiManager />
+          ) : (
+            <FacebookAppsManager />
+          )}
+        </div>
       )}
 
-      {/* Tab: FACEBOOK GRAPH API & PAGE LINKING (SCOPES & LONG-LIVED TOKENS) */}
-      {activeTab === 'facebook_graph' && (
-        <FacebookGraphApiManager />
+      {/* 2. TAB: WEBHOOKS & NOTIFICAÇÕES */}
+      {activeTab === 'webhooks' && (
+        <div className="space-y-4">
+          {/* Sub-selector */}
+          <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-xl border border-slate-200 flex-wrap">
+            <button
+              onClick={() => setWebhooksSubTab('config')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                webhooksSubTab === 'config'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Configurações & URLs
+            </button>
+            <button
+              onClick={() => setWebhooksSubTab('events')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                webhooksSubTab === 'events'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Subscrição de Eventos
+            </button>
+            <button
+              onClick={() => setWebhooksSubTab('callbacks')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                webhooksSubTab === 'callbacks'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Recepção Externa
+            </button>
+            <button
+              onClick={() => setWebhooksSubTab('signatures')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                webhooksSubTab === 'signatures'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Validação de Assinatura (HMAC)
+            </button>
+            <button
+              onClick={() => setWebhooksSubTab('retries')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                webhooksSubTab === 'retries'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Políticas de Retentativa
+            </button>
+            <button
+              onClick={() => setWebhooksSubTab('logs')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                webhooksSubTab === 'logs'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Logs ao Vivo</span>
+            </button>
+          </div>
+
+          {webhooksSubTab === 'config' && (
+            <WebhooksManager
+              initialSettings={webhookSettings}
+              onSaveSettings={onUpdateWebhookSettings}
+              onOpenFlow={onOpenFlow}
+              onOpenLiveChat={onOpenLiveChat}
+            />
+          )}
+          {webhooksSubTab === 'events' && <WebhookSubscriptions />}
+          {webhooksSubTab === 'callbacks' && <ExternalMessageWebhooksManager />}
+          {webhooksSubTab === 'signatures' && <WebhookSignatureTool />}
+          {webhooksSubTab === 'retries' && <WebhookRetryPolicyManager />}
+          {webhooksSubTab === 'logs' && (
+            <WebhookLogsViewer
+              onOpenFlow={onOpenFlow}
+              onOpenLiveChat={onOpenLiveChat}
+            />
+          )}
+        </div>
       )}
 
-      {/* Tab: WEBHOOK SIGNATURE & SECRET TOOL (HMAC VALIDATION & GENUINE CHECK) */}
-      {activeTab === 'webhook_signatures' && (
-        <WebhookSignatureTool />
-      )}
-
-      {/* Tab: WEBHOOK RETRY POLICIES & EXPONENTIAL BACKOFF */}
-      {activeTab === 'webhook_retries' && (
-        <WebhookRetryPolicyManager />
-      )}
-
-      {/* Tab: EXTERNAL MESSAGE WEBHOOKS & AUTHENTICATION CALLBACKS */}
-      {activeTab === 'external_message_webhooks' && (
-        <ExternalMessageWebhooksManager />
-      )}
-
-      {/* Tab: ACTIVITY AUDIT LOGS (AUDIT TRAIL) */}
-      {activeTab === 'activity_logs' && (
-        <ActivityLogsViewer />
-      )}
-
-      {/* Tab: WEBHOOK SUBSCRIPTIONS (EVENT-DRIVEN DISPATCH) */}
-      {activeTab === 'webhook_subscriptions' && (
-        <WebhookSubscriptions />
-      )}
-
-      {/* Tab: MULTI-APP FACEBOOK / META DEVELOPER APPS */}
-      {activeTab === 'fb_apps' && (
-        <FacebookAppsManager />
-      )}
-
-      {/* Tab: PRODUCTION DEPLOY & AUDIT */}
-      {activeTab === 'production' && (
-        <ProductionDeployHub />
-      )}
-
-      {/* Tab: WEBHOOK REAL-TIME LOGS VIEWER */}
-      {activeTab === 'webhook_logs' && (
-        <WebhookLogsViewer
-          onOpenFlow={onOpenFlow}
-          onOpenLiveChat={onOpenLiveChat}
-        />
-      )}
-
-      {/* Tab: MULTI-DOMAIN & WHITE-LABEL */}
+      {/* 3. TAB: DOMÍNIOS & MARCA */}
       {activeTab === 'domains' && (
         <DomainManager />
       )}
 
-      {/* Tab: TEAM & RBAC PERMISSIONS */}
-      {activeTab === 'team' && (
-        <TeamUserManager />
-      )}
-
-      {/* Tab: RATE LIMITS MONITOR */}
-      {activeTab === 'rate_limits' && (
-        <FacebookRateLimitMonitor />
-      )}
-
-      {/* Tab: CUSTOM FIELDS MANAGER */}
+      {/* 4. TAB: CAMPOS DO CRM */}
       {activeTab === 'custom_fields' && (
         <CustomFieldsManager
           customFields={customFields}
@@ -446,22 +351,12 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         />
       )}
 
-      {/* Tab: DATABASE & CONNECTION POOLER MANAGER */}
-      {activeTab === 'database' && (
-        <DatabaseManager />
+      {/* 5. TAB: EQUIPE & PERMISSÕES */}
+      {activeTab === 'team' && (
+        <TeamUserManager />
       )}
 
-      {/* Tab: WEBHOOKS MANAGER WITH MONGODB PERSISTENCE */}
-      {activeTab === 'webhooks' && (
-        <WebhooksManager
-          initialSettings={webhookSettings}
-          onSaveSettings={onUpdateWebhookSettings}
-          onOpenFlow={onOpenFlow}
-          onOpenLiveChat={onOpenLiveChat}
-        />
-      )}
-
-      {/* Tab 3: META CONNECTIONS & AI KNOWLEDGE */}
+      {/* 6. TAB: INTELIGÊNCIA ARTIFICIAL */}
       {activeTab === 'meta_ai' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Column: Meta Connections */}
@@ -469,7 +364,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
             <div className="bg-white border border-[#E2E8F0] rounded-xl p-6 space-y-4 shadow-sm">
               <h3 className="text-sm font-bold text-[#1A1D21] flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Contas Meta Conectadas</span>
+                <span>Canais Conectados</span>
               </h3>
 
               {/* Instagram Account */}
@@ -514,7 +409,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
                 </p>
               </div>
 
-              {/* WhatsApp Hybrid Engine (Cloud API + Baileys) */}
+              {/* WhatsApp Hybrid Engine */}
               <div className="p-4 rounded-lg bg-emerald-50/40 border border-emerald-200 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -567,14 +462,6 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
                   Webhook registrado e ouvindo comandos <code className="font-mono text-sky-700">/start</code>, inline buttons e canais.
                 </p>
               </div>
-
-              {/* Webhook Configuration Info */}
-              <div className="pt-2 border-t border-[#E2E8F0] space-y-2 text-xs">
-                <span className="font-semibold text-[#1A1D21] block">Webhook Callback URL</span>
-                <div className="p-2.5 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] font-mono text-[11px] text-[#0084FF] select-all truncate">
-                  https://api.manyflow.app/webhooks/meta-messenger
-                </div>
-              </div>
             </div>
           </div>
 
@@ -584,7 +471,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
               <div className="flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-purple-600" />
                 <h3 className="text-sm font-bold text-[#1A1D21]">
-                  Base de Conhecimento do Robô IA (Gemini 2.5)
+                  Base de Conhecimento do Robô IA (Gemini & Meta AI)
                 </h3>
               </div>
               <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200">
@@ -650,7 +537,60 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           </div>
         </div>
       )}
+
+      {/* 7. TAB: SERVIDOR & SISTEMA */}
+      {activeTab === 'system' && (
+        <div className="space-y-4">
+          {/* Sub-selector */}
+          <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-xl border border-slate-200 flex-wrap">
+            <button
+              onClick={() => setSystemSubTab('database')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                systemSubTab === 'database'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Banco de Dados MongoDB
+            </button>
+            <button
+              onClick={() => setSystemSubTab('deploy')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                systemSubTab === 'deploy'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Deploy em Produção (aaPanel)
+            </button>
+            <button
+              onClick={() => setSystemSubTab('rate_limits')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                systemSubTab === 'rate_limits'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Monitor de Consumo Meta API
+            </button>
+            <button
+              onClick={() => setSystemSubTab('audit')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                systemSubTab === 'audit'
+                  ? 'bg-slate-800 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Auditoria de Logs
+            </button>
+          </div>
+
+          {systemSubTab === 'database' && <DatabaseManager />}
+          {systemSubTab === 'deploy' && <ProductionDeployHub />}
+          {systemSubTab === 'rate_limits' && <FacebookRateLimitMonitor />}
+          {systemSubTab === 'audit' && <ActivityLogsViewer />}
+        </div>
+      )}
     </div>
   );
 };
-

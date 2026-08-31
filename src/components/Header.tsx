@@ -56,6 +56,8 @@ export const Header: React.FC<HeaderProps> = ({
         return 'Audiência & Gestão de Leads (CRM)';
       case 'analytics':
         return 'Relatórios & Métricas de Conversão';
+      case 'ab_testing':
+        return 'Testes A/B: Comparador Side-by-Side de Fluxos';
       case 'whatsapp_groups':
         return 'Super Administrador & Monetização de Grupos WhatsApp';
       case 'settings':

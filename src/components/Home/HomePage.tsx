@@ -35,17 +35,17 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
 interface HomePageProps {
-  onGoToApp: () => void;
+  onGoToApp?: () => void;
   onOpenLogin: () => void;
   onOpenRegister: () => void;
-  onOpenMasterLogin?: () => void;
+  onOpenDemo?: () => void;
 }
 
 export const HomePage: React.FC<HomePageProps> = ({
   onGoToApp,
   onOpenLogin,
   onOpenRegister,
-  onOpenMasterLogin
+  onOpenDemo
 }) => {
   const { user, tenant, isAuthenticated } = useAuth();
   const { isDark, toggleTheme } = useTheme();
@@ -255,6 +255,17 @@ export const HomePage: React.FC<HomePageProps> = ({
                   <Lock className="w-4 h-4 text-blue-600" />
                   <span>Já tenho conta (Fazer Login)</span>
                 </button>
+
+                {onGoToApp && (
+                  <button
+                    id="btn_hero_open_app_direct"
+                    onClick={onGoToApp}
+                    className="w-full sm:w-auto py-3 px-5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Layers className="w-4 h-4 text-indigo-500" />
+                    <span>Acessar Painel</span>
+                  </button>
+                )}
               </div>
 
               {/* Trust Indicators */}
@@ -531,19 +542,19 @@ export const HomePage: React.FC<HomePageProps> = ({
                 <span>Arquitetura Blindada Anti-Vazamento</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black text-white">
-                Como garantimos que estranhos nunca acessem seus sistemas e dados
+                Como garantimos a segurança máxima dos seus dados e clientes
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Nenhum usuário de um workspace consegue enxergar ou consultar fluxos, contatos ou tokens de outro workspace. Todo o tráfego é autenticado por tokens criptografados e respaldado por uma <strong>Senha Master central</strong>.
+                Nenhum usuário de um workspace consegue enxergar ou consultar fluxos, contatos ou mensagens de outro workspace. Todo o tráfego é autenticado por tokens criptografados e chaves com isolamento rigoroso.
               </p>
 
               <div className="space-y-3 pt-2">
                 <div className="flex items-start gap-3 bg-slate-800/80 p-3.5 rounded-xl border border-slate-700">
-                  <KeyRound className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="text-xs font-bold text-white">Senha Master Exclusiva do Administrador Master</h4>
+                    <h4 className="text-xs font-bold text-white">Criptografia de Ponta a Ponta & Tokens Seguros</h4>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Somente você pode configurar ou alterar a Senha Master. Ela permite acesso emergencial e controle global de segurança.
+                      Tokens de longa duração da Graph API e credenciais são armazenados de forma criptografada no banco de dados.
                     </p>
                   </div>
                 </div>
@@ -553,17 +564,17 @@ export const HomePage: React.FC<HomePageProps> = ({
                   <div>
                     <h4 className="text-xs font-bold text-white">Isolamento Físico de Workspaces (Multi-Tenant)</h4>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Consultas ao banco MongoDB são escopadas estritamente por <code>tenantId</code>. Ninguém tem acesso aos contatos ou credenciais alheias.
+                      Consultas ao banco de dados são escopadas estritamente por workspace. Ninguém tem acesso aos contatos ou credenciais alheias.
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3 bg-slate-800/80 p-3.5 rounded-xl border border-slate-700">
-                  <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                  <ShieldAlert className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="text-xs font-bold text-white">Modo Lockdown de Emergência</h4>
+                    <h4 className="text-xs font-bold text-white">Validação de Assinatura Webhook (HMAC SHA-256)</h4>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Em caso de suspeita, o Administrador Master pode congelar todos os acessos não-autorizados com 1 clique.
+                      Todo payload recebido da Meta é verificado criptograficamente antes de ser processado pelo motor de automação.
                     </p>
                   </div>
                 </div>
@@ -588,24 +599,12 @@ export const HomePage: React.FC<HomePageProps> = ({
                 <div className="space-y-2 text-slate-300 text-[11px] leading-relaxed">
                   <p className="text-emerald-400">✓ Meta Webhook Signature HMAC SHA-256: VERIFIED</p>
                   <p className="text-blue-400">✓ Tenant Scoping: Strict Validation per Session</p>
-                  <p className="text-amber-400">✓ Master Admin Gate: Authenticated via Master Password</p>
+                  <p className="text-emerald-400">✓ Token Authorization: JWT Bearer Scoped per Workspace</p>
                   <p className="text-indigo-400">✓ Database: MongoDB Pool Active with Composite Indexes</p>
                   <p className="text-slate-400 pt-2 border-t border-slate-700">
                     [Status] Nenhuma violação detectada. Todas as requisições autenticadas.
                   </p>
                 </div>
-
-                {onOpenMasterLogin && (
-                  <div className="pt-2">
-                    <button
-                      onClick={onOpenMasterLogin}
-                      className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                    >
-                      <KeyRound className="w-4 h-4" />
-                      <span>Painel de Autenticação com Senha Master</span>
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -823,15 +822,6 @@ export const HomePage: React.FC<HomePageProps> = ({
             <button onClick={onOpenLogin} className="hover:text-blue-600 transition-colors cursor-pointer">
               Login de Clientes
             </button>
-            {onOpenMasterLogin && (
-              <button
-                onClick={onOpenMasterLogin}
-                className="hover:text-amber-600 flex items-center gap-1 transition-colors cursor-pointer text-amber-600 dark:text-amber-400 font-bold"
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>Acesso Master</span>
-              </button>
-            )}
             <span className="text-slate-300 dark:text-slate-700">|</span>
             <span className="text-emerald-600 font-mono text-[11px] flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
