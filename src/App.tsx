@@ -43,6 +43,9 @@ const InteractiveSimulatorModal = lazy(() =>
 const AIFlowGeneratorModal = lazy(() =>
   import('./components/AIFlowGenerator/AIFlowGeneratorModal').then((m) => ({ default: m.AIFlowGeneratorModal }))
 );
+const FlowTemplatesModal = lazy(() =>
+  import('./components/FlowBuilder/FlowTemplatesModal').then((m) => ({ default: m.FlowTemplatesModal }))
+);
 const LoginPage = lazy(() =>
   import('./components/Auth/LoginPage').then((m) => ({ default: m.LoginPage }))
 );
@@ -94,6 +97,7 @@ function MainApp() {
   // Modals state
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
+  const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
@@ -214,6 +218,16 @@ function MainApp() {
     });
   };
 
+  const handleSelectTemplate = (templateFlow: Flow) => {
+    setFlows((prev) => [templateFlow, ...prev]);
+    setSelectedFlowId(templateFlow.id);
+    setCurrentTab('flows');
+
+    dbService.createFlow(templateFlow).catch((err) => {
+      console.warn('[App] Erro ao salvar modelo pronto no MongoDB:', err);
+    });
+  };
+
   const handleUpdateContacts = (newContacts: Contact[] | ((prev: Contact[]) => Contact[])) => {
     if (typeof newContacts === 'function') {
       setContacts((prev) => {
@@ -292,6 +306,7 @@ function MainApp() {
           onCreateNewFlow={handleCreateNewFlow}
           onOpenSimulator={() => setIsSimulatorOpen(true)}
           onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
+          onOpenTemplates={() => setIsTemplatesModalOpen(true)}
           selectedChannel={selectedChannel}
         />
 
@@ -318,6 +333,7 @@ function MainApp() {
                 onUpdateFlow={handleUpdateFlow}
                 openSimulator={() => setIsSimulatorOpen(true)}
                 openAIGenerator={() => setIsAIGeneratorOpen(true)}
+                openTemplates={() => setIsTemplatesModalOpen(true)}
                 customFields={customFields}
               />
             )}
@@ -449,6 +465,18 @@ function MainApp() {
             isOpen={isAIGeneratorOpen}
             onClose={() => setIsAIGeneratorOpen(false)}
             onFlowGenerated={handleFlowGenerated}
+          />
+        </Suspense>
+      )}
+
+      {/* Ready-made Flow Templates Library Modal */}
+      {isTemplatesModalOpen && (
+        <Suspense fallback={null}>
+          <FlowTemplatesModal
+            isOpen={isTemplatesModalOpen}
+            onClose={() => setIsTemplatesModalOpen(false)}
+            onSelectTemplate={handleSelectTemplate}
+            onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
           />
         </Suspense>
       )}

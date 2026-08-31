@@ -1,4 +1,5 @@
 import { Flow, KeywordTrigger, PostCommentGrowthTool, Contact, LiveConversation, BotKnowledgeBase, MetaConnectionConfig, CustomFieldDefinition, BroadcastCampaign, UtilityMessageTemplate, ConnectedMetaAccount, MetaPostItem, FacebookApp } from '../types';
+import { FLOW_TEMPLATES } from './flowTemplates';
 
 export const INITIAL_FLOWS: Flow[] = [
   {
@@ -657,7 +658,8 @@ export const INITIAL_FLOWS: Flow[] = [
       { fromNodeId: "node_action_tag", toNodeId: "node_delay_1", handleType: "default" },
       { fromNodeId: "node_delay_1", toNodeId: "node_msg_link", handleType: "default" }
     ]
-  }
+  },
+  ...FLOW_TEMPLATES.map((t) => t.flow)
 ];
 
 export const INITIAL_TRIGGERS: KeywordTrigger[] = [

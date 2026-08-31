@@ -6,13 +6,14 @@ import {
   Instagram, 
   Facebook, 
   Activity, 
-  Search,
-  CheckCircle2,
-  Sun,
-  Moon,
-  Users,
-  Send,
-  MessageCircle
+  Search, 
+  CheckCircle2, 
+  Sun, 
+  Moon, 
+  Users, 
+  Send, 
+  MessageCircle,
+  Zap
 } from 'lucide-react';
 import { ChannelType, Flow, NavigationTab } from '../types';
 import { useTheme } from '../context/ThemeContext';
@@ -25,6 +26,7 @@ interface HeaderProps {
   onCreateNewFlow: () => void;
   onOpenSimulator: () => void;
   onOpenAIGenerator: () => void;
+  onOpenTemplates?: () => void;
   selectedChannel?: ChannelType;
 }
 
@@ -36,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   onCreateNewFlow,
   onOpenSimulator,
   onOpenAIGenerator,
+  onOpenTemplates,
   selectedChannel = 'omnichannel'
 }) => {
   const { isDark, toggleTheme } = useTheme();
@@ -144,6 +147,19 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span className="font-semibold">Webhooks Ativos</span>
         </div>
+
+        {/* Templates CTA */}
+        {onOpenTemplates && (
+          <button
+            id="btn_header_templates"
+            onClick={onOpenTemplates}
+            className="py-1.5 px-3 rounded-md bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-pink-500/10 hover:from-amber-500/20 hover:to-pink-500/20 border border-amber-300/80 dark:border-amber-700/80 text-amber-700 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs hover:scale-102"
+            title="Modelos Prontos para Influenciadores, Infoprodutos, E-commerce e AdSense"
+          >
+            <Zap className="w-3.5 h-3.5 fill-current text-amber-500" />
+            <span>Modelos Prontos</span>
+          </button>
+        )}
 
         {/* AI Generator CTA */}
         <button

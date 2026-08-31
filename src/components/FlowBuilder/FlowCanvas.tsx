@@ -34,6 +34,7 @@ interface FlowCanvasProps {
   onUpdateFlow: (updatedFlow: Flow) => void;
   openSimulator: () => void;
   openAIGenerator: () => void;
+  openTemplates?: () => void;
   customFields?: CustomFieldDefinition[];
 }
 
@@ -42,6 +43,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
   onUpdateFlow,
   openSimulator,
   openAIGenerator,
+  openTemplates,
   customFields = []
 }) => {
   const [zoom, setZoom] = useState(1);
@@ -248,6 +250,19 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
               {showPerformanceOverlay ? 'Ocultar' : 'Gráfico'}
             </span>
           </button>
+
+          {/* Ready-made Templates CTA */}
+          {openTemplates && (
+            <button
+              id="btn_canvas_templates"
+              onClick={openTemplates}
+              className="py-1.5 px-3 rounded-md bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-pink-500/15 hover:from-amber-500/25 hover:to-pink-500/25 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-102"
+              title="Explorar Modelos Prontos (Influenciador, Infoproduto, E-commerce e AdSense)"
+            >
+              <Zap className="w-3.5 h-3.5 fill-current text-amber-500" />
+              <span>Modelos Prontos</span>
+            </button>
+          )}
 
           {/* Voice-to-Flow Builder Button */}
           <button
