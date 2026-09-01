@@ -1388,6 +1388,7 @@ const handleMetaWebhookVerification = async (req: express.Request, res: express.
 };
 
 app.get("/api/webhooks/meta-receive", handleMetaWebhookVerification);
+app.get("/api/webhooks/facebook", handleMetaWebhookVerification);
 app.get("/api/meta/webhook", handleMetaWebhookVerification);
 app.get("/api/webhooks/verify", handleMetaWebhookVerification);
 
@@ -1423,6 +1424,7 @@ const handleMetaWebhookPost = async (req: express.Request, res: express.Response
 };
 
 app.post("/api/webhooks/meta-receive", handleMetaWebhookPost);
+app.post("/api/webhooks/facebook", handleMetaWebhookPost);
 app.post("/api/meta/webhook", handleMetaWebhookPost);
 
 // 3. POST /api/webhooks/process-event - Direct Synchronous Simulation & Execution with Full Trace Output
@@ -3809,34 +3811,31 @@ app.post("/api/auth/login", async (req, res) => {
     const cleanEmail = email.trim().toLowerCase();
 
     if (!db) {
-      // In-memory demo fallback if DB is still starting
-      const isGestor = cleanEmail.includes("gestor") || cleanEmail.includes("agencia");
-      const isAtendente = cleanEmail.includes("suporte") || cleanEmail.includes("atendente");
-      const role = isAtendente ? "agent" : isGestor ? "manager" : "super_admin";
-      const name = isAtendente ? "Camila Atendente" : isGestor ? "Gestor de Agência" : "Administrador ManyFlow";
+      // In-memory clean fallback if DB is still starting
+      const userName = cleanEmail.split("@")[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || "Administrador";
 
-      const mockUser = {
-        id: isAtendente ? "usr_atendente_demo" : isGestor ? "usr_gestor_agencia" : "usr_admin_default",
-        name,
+      const fallbackUser = {
+        id: `usr_${Date.now()}`,
+        name: userName,
         email: cleanEmail,
-        role,
+        role: "super_admin",
         tenantId: "tenant_main",
         allowedTenants: ["tenant_main"],
         isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
-      const mockTenant = {
+      const fallbackTenant = {
         id: "tenant_main",
-        name: "ManyFlow Principal",
-        slug: "manyflow-principal",
+        name: "Workspace Principal",
+        slug: "workspace-principal",
         domains: [{ id: "dom_1", domain: "localhost:3000", isPrimary: true, sslStatus: "active", dnsStatus: "verified", verificationToken: "manyflow_root", targetHost: "127.0.0.1:3000", cnameRecord: "app.manyflow.com", createdAt: new Date().toISOString() }],
         branding: { brandName: "ManyFlow", primaryColor: "#0084FF", supportEmail: "suporte@manyflow.com" },
-        ownerId: mockUser.id,
+        ownerId: fallbackUser.id,
         maxUsers: 50,
-        maxFlows: 200,
+        maxFlows: 500,
         maxContacts: 500000,
-        plan: "whitelabel",
+        plan: "enterprise",
         isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -3845,26 +3844,23 @@ app.post("/api/auth/login", async (req, res) => {
       return res.json({
         success: true,
         token: `mf_token_${Date.now()}_${crypto.randomBytes(8).toString("hex")}`,
-        user: mockUser,
-        tenant: mockTenant
+        user: fallbackUser,
+        tenant: fallbackTenant
       });
     }
 
     let user: any = await db.collection("users").findOne({ email: cleanEmail });
 
-    // If no user exists yet, auto-create demo account or admin
+    // If no user exists yet, auto-create clean admin account
     if (!user) {
-      const isGestor = cleanEmail.includes("gestor") || cleanEmail.includes("agencia");
-      const isAtendente = cleanEmail.includes("suporte") || cleanEmail.includes("atendente");
-      const role = isAtendente ? "agent" : isGestor ? "manager" : "super_admin";
-      const name = isAtendente ? "Camila Atendente" : isGestor ? "Gestor de Agência" : cleanEmail.split("@")[0].toUpperCase();
+      const userName = cleanEmail.split("@")[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) || "Administrador";
 
       user = {
-        id: isAtendente ? "usr_atendente_demo" : isGestor ? "usr_gestor_agencia" : `usr_${Date.now()}`,
-        name,
+        id: `usr_${Date.now()}`,
+        name: userName,
         email: cleanEmail,
         passwordHash: password || "admin123",
-        role,
+        role: "super_admin",
         tenantId: "tenant_main",
         allowedTenants: ["tenant_main"],
         isActive: true,
@@ -4535,109 +4531,7 @@ app.get("/api/auth/master-logs", async (req, res) => {
 // ============================================================================
 
 // Memory store fallback for Facebook Apps
-let inMemoryFacebookApps: any[] = [
-  {
-    id: "fb_app_master_01",
-    name: "ManyFlow Principal (Agência & Matriz)",
-    appId: "982736154819203",
-    appSecret: "a8f9b2c3d4e5f67a8b9c0d1e2f3a4b5c",
-    appType: "business",
-    status: "active",
-    apiVersion: "v21.0",
-    ownerUserId: "usr_super_1",
-    ownerUserName: "Administrador Principal",
-    ownerUserEmail: "admin@manyflow.com",
-    tenantId: "tenant_main",
-    assignedUserIds: ["all"],
-    systemUserToken: "EAAO9ZCYZBZC...system_user_token_permanent_active",
-    verifyToken: "manyflow_verify_token_secure_2026",
-    webhookCallbackUrl: "https://seu-dominio-aapanel.com/api/webhooks/meta-receive?app_id=982736154819203",
-    isWebhookLive: true,
-    pages: [
-      {
-        id: "108293849182390",
-        name: "ManyFlow Brasil - Automações",
-        category: "Software & Marketing",
-        followersCount: 14200,
-        instagramBusinessId: "178414019283746",
-        instagramUsername: "@manyflow.oficial",
-        instagramAvatarUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80",
-        pageAccessToken: "EAAB...page_token_encrypted",
-        isWebhookSubscribed: true,
-        tasks: ["MANAGE", "MESSAGING", "ANALYZE"]
-      }
-    ],
-    whatsAppAccounts: [
-      {
-        wabaId: "109283746192834",
-        phoneNumberId: "108374619283471",
-        displayPhoneNumber: "+55 11 99999-8888",
-        verifiedName: "ManyFlow Brasil",
-        qualityRating: "GREEN"
-      }
-    ],
-    approvedPermissions: [
-      "pages_messaging",
-      "instagram_manage_messages",
-      "pages_read_engagement",
-      "pages_manage_metadata",
-      "whatsapp_business_management",
-      "instagram_basic",
-      "leads_retrieval",
-      "public_profile"
-    ],
-    rateLimitUsagePercent: 14,
-    isDefault: true,
-    createdAt: "2026-08-01T10:00:00Z",
-    updatedAt: "2026-08-29T18:00:00Z",
-    lastCheckedAt: "2026-08-30T17:00:00Z"
-  },
-  {
-    id: "fb_app_gestor_02",
-    name: "Agência Alpha - Clientes E-commerce",
-    appId: "748192039481273",
-    appSecret: "f7e6d5c4b3a21098f7e6d5c4b3a21098",
-    appType: "business",
-    status: "active",
-    apiVersion: "v21.0",
-    ownerUserId: "usr_mgr_2",
-    ownerUserName: "Carlos Oliveira (Gestor de Tráfego)",
-    ownerUserEmail: "gestor@agenciadigital.com",
-    tenantId: "tenant_main",
-    assignedUserIds: ["usr_mgr_2", "usr_super_1"],
-    systemUserToken: "EAAH7bK...system_user_token_alpha",
-    verifyToken: "alpha_agency_webhook_verify_2026",
-    webhookCallbackUrl: "https://seu-dominio-aapanel.com/api/webhooks/meta-receive?app_id=748192039481273",
-    isWebhookLive: true,
-    pages: [
-      {
-        id: "301928475610293",
-        name: "Bella Moda & Calçados",
-        category: "E-commerce / Moda",
-        followersCount: 29800,
-        instagramBusinessId: "178414055443322",
-        instagramUsername: "@bellamoda.calcados",
-        instagramAvatarUrl: "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=150&auto=format&fit=crop&q=80",
-        pageAccessToken: "EAAB...page_token_bella",
-        isWebhookSubscribed: true,
-        tasks: ["MESSAGING", "ADVERTISE", "ANALYZE"]
-      }
-    ],
-    whatsAppAccounts: [],
-    approvedPermissions: [
-      "pages_messaging",
-      "instagram_manage_messages",
-      "pages_read_engagement",
-      "leads_retrieval",
-      "instagram_basic"
-    ],
-    rateLimitUsagePercent: 22,
-    isDefault: false,
-    createdAt: "2026-08-15T14:30:00Z",
-    updatedAt: "2026-08-29T16:15:00Z",
-    lastCheckedAt: "2026-08-30T16:45:00Z"
-  }
-];
+let inMemoryFacebookApps: any[] = [];
 
 // 1. GET /api/facebook-apps - List apps (scoped by tenant and user)
 app.get("/api/facebook-apps", async (req, res) => {

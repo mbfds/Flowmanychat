@@ -25,12 +25,14 @@ export const facebookAppsService = {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
     } catch {
       // Ignored
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_FACEBOOK_APPS));
     return INITIAL_FACEBOOK_APPS;
   },
 

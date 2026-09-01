@@ -66,7 +66,7 @@ export const TriggersManager: React.FC<TriggersManagerProps> = ({
       setKeywords(['PRICING', 'PRICE', 'PLANS', 'COST', 'PREÇO', 'VALOR', 'TABELA']);
       setMatchType('contains');
       const pFlow = flows.find((f) => f.id === 'flow_pricing_keyword') || flows[0];
-      setTargetFlowId(pFlow.id);
+      setTargetFlowId(pFlow?.id || '');
       setCooldownMinutes(15);
     } else if (preset === 'discount') {
       setName("Gatilho de Desconto & Cupom ('discount')");
@@ -74,7 +74,7 @@ export const TriggersManager: React.FC<TriggersManagerProps> = ({
       setKeywords(['DISCOUNT', 'COUPON', 'PROMO', 'OFFER', 'DESCONTO', 'CUPOM', '20% OFF']);
       setMatchType('contains');
       const dFlow = flows.find((f) => f.id === 'flow_discount_keyword') || flows[0];
-      setTargetFlowId(dFlow.id);
+      setTargetFlowId(dFlow?.id || '');
       setCooldownMinutes(30);
     } else if (preset === 'support') {
       setName("Gatilho de Suporte & Central de Ajuda ('support')");
@@ -82,7 +82,7 @@ export const TriggersManager: React.FC<TriggersManagerProps> = ({
       setKeywords(['SUPPORT', 'HELP', 'SUPORTE', 'AJUDA', 'CONTACT SUPPORT', 'HUMANO', 'ATENDENTE']);
       setMatchType('contains');
       const sFlow = flows.find((f) => f.id === 'flow_support_keyword') || flows[0];
-      setTargetFlowId(sFlow.id);
+      setTargetFlowId(sFlow?.id || '');
       setCooldownMinutes(5);
     } else {
       setName('');
@@ -220,7 +220,7 @@ export const TriggersManager: React.FC<TriggersManagerProps> = ({
           }`}
         >
           <Zap className="w-3.5 h-3.5 text-amber-500" />
-          <span>Palavras-Chave ('pricing', 'discount', 'support')</span>
+          <span>Palavras-Chave</span>
           <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold">
             {triggers.length}
           </span>
@@ -236,7 +236,7 @@ export const TriggersManager: React.FC<TriggersManagerProps> = ({
           }`}
         >
           <MessageSquare className="w-3.5 h-3.5 text-pink-500" />
-          <span>Mensagens de Boas-Vindas Automatizadas (Instagram & FB)</span>
+          <span>Boas-Vindas</span>
           <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-bold">
             Ativo
           </span>
@@ -252,7 +252,7 @@ export const TriggersManager: React.FC<TriggersManagerProps> = ({
           }`}
         >
           <HelpCircle className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Resposta Padrão (No Match / Fallback)</span>
+          <span>Resposta Padrão (Fallback)</span>
           <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 font-bold">
             24/7
           </span>

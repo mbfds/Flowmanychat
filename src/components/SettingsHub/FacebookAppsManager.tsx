@@ -45,10 +45,12 @@ import { useAuth } from '../../context/AuthContext';
 
 interface FacebookAppsManagerProps {
   onSelectActiveApp?: (app: FacebookApp) => void;
+  onOpenWizard?: () => void;
 }
 
 export const FacebookAppsManager: React.FC<FacebookAppsManagerProps> = ({
-  onSelectActiveApp
+  onSelectActiveApp,
+  onOpenWizard
 }) => {
   const { user: currentUser, tenant } = useAuth();
   const [apps, setApps] = useState<FacebookApp[]>([]);
@@ -371,13 +373,23 @@ export const FacebookAppsManager: React.FC<FacebookAppsManagerProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            {onOpenWizard && (
+              <button
+                onClick={onOpenWizard}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-blue-200" />
+                <span>Assistente de Configuração (Passo a Passo)</span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsTutorialExpanded(!isTutorialExpanded)}
               className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/15 flex items-center gap-2 cursor-pointer"
             >
               <HelpCircle className="w-4 h-4 text-blue-300" />
-              <span>Como Criar App no Meta</span>
+              <span>Tutorial Rápido</span>
             </button>
 
             <button
@@ -385,7 +397,7 @@ export const FacebookAppsManager: React.FC<FacebookAppsManagerProps> = ({
               className="px-5 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2 cursor-pointer transform active:scale-95"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Adicionar App Facebook</span>
+              <span>+ Adicionar Manualmente</span>
             </button>
           </div>
         </div>
@@ -569,13 +581,24 @@ export const FacebookAppsManager: React.FC<FacebookAppsManagerProps> = ({
                 : 'Você ainda não possui nenhum App de Facebook cadastrado para este usuário ou workspace.'}
             </p>
           </div>
-          <button
-            onClick={handleOpenCreateModal}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer inline-flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Cadastrar Meu Primeiro App</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            {onOpenWizard && (
+              <button
+                onClick={onOpenWizard}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-md cursor-pointer inline-flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-blue-200" />
+                <span>Iniciar Assistente Passo a Passo (Recomendado)</span>
+              </button>
+            )}
+            <button
+              onClick={handleOpenCreateModal}
+              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Cadastrar Manualmente</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

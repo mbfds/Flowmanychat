@@ -47,7 +47,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [recoveryStep, setRecoveryStep] = useState<1 | 2>(1);
   const [recoveryCode, setRecoveryCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [demoCodeHint, setDemoCodeHint] = useState<string | null>(null);
   
   // Feedback states
   const [isLoading, setIsLoading] = useState(false);
@@ -58,26 +57,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const brandName = tenant?.branding?.brandName || 'ManyFlow';
   const primaryColor = tenant?.branding?.primaryColor || '#0084FF';
 
-  // Quick Demo Logins
-  const handleQuickLogin = async (demoEmail: string, demoPass: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPass);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    setIsLoading(true);
-
-    const res = await login(demoEmail, demoPass);
-    setIsLoading(false);
-    if (res.success) {
-      setSuccessMsg('Autenticado com sucesso!');
-      if (onSuccess) {
-        setTimeout(onSuccess, 400);
-      }
-    } else {
-      setErrorMsg(res.error || 'Falha ao autenticar.');
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -85,10 +64,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setIsLoading(true);
 
     if (mode === 'login') {
-      const res = await login(email || 'gestor@agenciadigital.com', password || 'admin123');
+      if (!email || !password) {
+        setIsLoading(false);
+        return setErrorMsg('Por favor, informe seu e-mail e senha.');
+      }
+      const res = await login(email.trim(), password);
       setIsLoading(false);
       if (res.success) {
-        setSuccessMsg('Login realizado com sucesso! Redirecionando...');
+        setSuccessMsg('Login realizado com sucesso! Entrando...');
         if (onSuccess) {
           setTimeout(onSuccess, 300);
         }
@@ -96,11 +79,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         setErrorMsg(res.error || 'Credenciais inválidas.');
       }
     } else if (mode === 'register') {
-      if (!name) {
+      if (!name || !email || !password) {
         setIsLoading(false);
-        return setErrorMsg('Por favor, informe seu nome completo.');
+        return setErrorMsg('Por favor, preencha todos os campos obrigatórios.');
       }
-      const res = await register(name, email, password || 'admin123', workspaceName);
+      const res = await register(name.trim(), email.trim(), password, workspaceName.trim());
       setIsLoading(false);
       if (res.success) {
         setSuccessMsg('Conta e Workspace criados com sucesso!');
@@ -114,26 +97,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       if (recoveryStep === 1) {
         if (!email) {
           setIsLoading(false);
-          return setErrorMsg('Por favor, informe seu email.');
+          return setErrorMsg('Por favor, informe seu e-mail.');
         }
-        const res = await resetPassword(email);
+        const res = await resetPassword(email.trim());
         setIsLoading(false);
         if (res.success) {
-          setSuccessMsg(res.message || 'Código enviado com sucesso.');
-          if (res.demoCode) {
-            setDemoCodeHint(res.demoCode);
-            setRecoveryCode(res.demoCode);
-          }
+          setSuccessMsg(res.message || 'Código de verificação enviado para o seu e-mail.');
           setRecoveryStep(2);
         } else {
           setErrorMsg(res.error || 'Erro ao solicitar recuperação.');
         }
       } else {
+        if (!recoveryCode) {
+          setIsLoading(false);
+          return setErrorMsg('Por favor, digite o código de verificação recebido.');
+        }
         if (!newPassword || newPassword.length < 6) {
           setIsLoading(false);
           return setErrorMsg('A nova senha deve ter pelo menos 6 caracteres.');
         }
-        const res = await resetPassword(email, recoveryCode, newPassword);
+        const res = await resetPassword(email.trim(), recoveryCode.trim(), newPassword);
         setIsLoading(false);
         if (res.success) {
           setSuccessMsg(res.message || 'Senha redefinida com sucesso!');
@@ -141,7 +124,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             setMode('login');
             setPassword(newPassword);
             setRecoveryStep(1);
-            setDemoCodeHint(null);
           }, 1200);
         } else {
           setErrorMsg(res.error || 'Erro ao definir nova senha.');
@@ -326,12 +308,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           {/* MODE: RECOVERY STEP 1 & 2 */}
           {mode === 'recovery' && recoveryStep === 2 ? (
             <>
-              {demoCodeHint && (
-                <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs">
-                  <span className="font-bold">Código de Sandbox (Simulação):</span>{' '}
-                  <code className="bg-white px-2 py-0.5 rounded font-mono font-bold text-blue-700">{demoCodeHint}</code>
-                </div>
-              )}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Código de 6 Dígitos</label>
                 <div className="relative">
@@ -371,7 +347,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <input
                   type="email"
                   required
-                  placeholder="gestor@agenciadigital.com ou seu email"
+                  placeholder="seu-email@suaempresa.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 rounded-xl border border-slate-200 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-hidden transition-all"
@@ -466,37 +442,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </button>
         </form>
 
-        {/* QUICK DEMO PERSONAS ACCESS */}
-        <div className="p-4 bg-slate-50/90 border-t border-slate-100 space-y-2.5">
-          <div className="flex items-center justify-between text-[11px] text-slate-500">
-            <span className="font-semibold text-slate-600">Acesso Rápido de Demonstração:</span>
-            <span className="text-[10px] text-slate-400">1-Clique</span>
+        {/* SECURITY & ISOLATION BADGE */}
+        <div className="p-4 bg-slate-50/90 border-t border-slate-100 flex flex-col items-center justify-center gap-1 text-center">
+          <div className="flex items-center justify-center gap-1.5 text-xs text-slate-600 font-semibold">
+            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <span>Ambiente Corporativo Seguro & Criptografado</span>
           </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('gestor@agenciadigital.com', 'admin123')}
-              className="p-2.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-700 text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer shadow-2xs group"
-            >
-              <Briefcase className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" />
-              <span>Gestor de Agência</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('suporte@atendimento.com', 'admin123')}
-              className="p-2.5 rounded-xl bg-white hover:bg-blue-50 border border-slate-200 text-slate-700 hover:text-blue-700 text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer shadow-2xs group"
-            >
-              <Headphones className="w-4 h-4 text-emerald-500 group-hover:scale-110 transition-transform" />
-              <span>Atendente</span>
-            </button>
-          </div>
-
-          <div className="flex items-center justify-center gap-1.5 text-[10px] text-slate-400 pt-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Sessão segura com Token JWT e Isolamento Multi-Tenant</span>
-          </div>
+          <p className="text-[11px] text-slate-400">
+            Autenticação JWT protegida com isolamento total de dados e multi-tenancy.
+          </p>
         </div>
       </div>
 

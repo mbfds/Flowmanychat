@@ -81,7 +81,7 @@ function MainApp() {
   const [currentTab, setCurrentTab] = useState<NavigationTab>('flows');
   const [selectedChannel, setSelectedChannel] = useState<ChannelType>('omnichannel');
   const [flows, setFlows] = useState<Flow[]>(INITIAL_FLOWS);
-  const [selectedFlowId, setSelectedFlowId] = useState<string>(INITIAL_FLOWS[0].id);
+  const [selectedFlowId, setSelectedFlowId] = useState<string>(INITIAL_FLOWS[0]?.id || '');
 
   // Growth Tools, Triggers & Live Data states
   const [triggers, setTriggers] = useState<KeywordTrigger[]>(INITIAL_TRIGGERS);
@@ -113,7 +113,7 @@ function MainApp() {
         if (remoteFlows && remoteFlows.length > 0) {
           setFlows(remoteFlows);
           if (!remoteFlows.some((f) => f.id === selectedFlowId)) {
-            setSelectedFlowId(remoteFlows[0].id);
+            setSelectedFlowId(remoteFlows[0]?.id || '');
           }
         } else {
           // Seed initial flows to MongoDB

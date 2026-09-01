@@ -46,6 +46,9 @@ import { ExternalMessageWebhooksManager } from './ExternalMessageWebhooksManager
 import { WebhookSignatureTool } from './WebhookSignatureTool';
 import { WebhookRetryPolicyManager } from './WebhookRetryPolicyManager';
 import { FacebookGraphApiManager } from './FacebookGraphApiManager';
+import { MetaAppSetupWizard } from './MetaAppSetupWizard';
+import { MetaWebhooksValidator } from './MetaWebhooksValidator';
+import { MetaTokenValidator } from './MetaTokenValidator';
 
 interface SettingsHubProps {
   knowledgeBase: BotKnowledgeBase;
@@ -68,12 +71,13 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   onOpenFlow,
   onOpenLiveChat
 }) => {
-  // Main simplified categories: 7 intuitive tabs for laypeople
-  const [activeTab, setActiveTab] = useState<'facebook' | 'webhooks' | 'domains' | 'custom_fields' | 'team' | 'meta_ai' | 'system'>('facebook');
+  // Main simplified categories: 6 clean intuitive tabs
+  const [activeTab, setActiveTab] = useState<'facebook' | 'webhooks' | 'meta_ai' | 'team_crm' | 'domains' | 'system'>('facebook');
   
   // Secondary sub-tab states for cleaner navigation
-  const [facebookSubTab, setFacebookSubTab] = useState<'graph_api' | 'apps'>('graph_api');
-  const [webhooksSubTab, setWebhooksSubTab] = useState<'config' | 'events' | 'callbacks' | 'signatures' | 'retries' | 'logs'>('config');
+  const [facebookSubTab, setFacebookSubTab] = useState<'token_validator' | 'wizard' | 'apps' | 'graph_api'>('token_validator');
+  const [webhooksSubTab, setWebhooksSubTab] = useState<'meta_validator' | 'config' | 'logs' | 'advanced'>('meta_validator');
+  const [teamCrmSubTab, setTeamCrmSubTab] = useState<'team' | 'fields'>('team');
   const [systemSubTab, setSystemSubTab] = useState<'database' | 'deploy' | 'rate_limits' | 'audit'>('database');
 
   const [formData, setFormData] = useState<BotKnowledgeBase>(knowledgeBase);
@@ -110,14 +114,14 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         )}
       </div>
 
-      {/* Primary Tabs Navigation (Simplified 7 Essential Tabs) */}
+      {/* Primary Tabs Navigation (Simplified Clean Tabs) */}
       <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-1 overflow-x-auto">
         <button
           id="tab_settings_facebook"
           onClick={() => setActiveTab('facebook')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'facebook'
-              ? 'border-blue-600 text-blue-900 dark:text-blue-200 bg-blue-50/80 rounded-t-lg font-black'
+              ? 'border-blue-600 text-blue-900 bg-blue-50/80 rounded-t-lg font-black'
               : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
           }`}
         >
@@ -146,48 +150,6 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         </button>
 
         <button
-          id="tab_settings_domains"
-          onClick={() => setActiveTab('domains')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'domains'
-              ? 'border-blue-600 text-blue-800 bg-blue-50/70 rounded-t-lg font-black'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Globe className="w-4 h-4 text-blue-600" />
-          <span>Domínios & Marca</span>
-        </button>
-
-        <button
-          id="tab_settings_custom_fields"
-          onClick={() => setActiveTab('custom_fields')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'custom_fields'
-              ? 'border-purple-600 text-purple-900 bg-purple-50/70 rounded-t-lg font-black'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Variable className="w-4 h-4 text-purple-600" />
-          <span>Campos do CRM</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
-            {customFields.length}
-          </span>
-        </button>
-
-        <button
-          id="tab_settings_team"
-          onClick={() => setActiveTab('team')}
-          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === 'team'
-              ? 'border-indigo-600 text-indigo-800 bg-indigo-50/70 rounded-t-lg font-black'
-              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
-          }`}
-        >
-          <Users className="w-4 h-4 text-indigo-600" />
-          <span>Equipe & Permissões</span>
-        </button>
-
-        <button
           id="tab_settings_meta_ai"
           onClick={() => setActiveTab('meta_ai')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
@@ -198,6 +160,32 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         >
           <Sparkles className="w-4 h-4 text-purple-600" />
           <span>Inteligência Artificial (IA)</span>
+        </button>
+
+        <button
+          id="tab_settings_team_crm"
+          onClick={() => setActiveTab('team_crm')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'team_crm'
+              ? 'border-indigo-600 text-indigo-800 bg-indigo-50/70 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Users className="w-4 h-4 text-indigo-600" />
+          <span>Equipe & CRM</span>
+        </button>
+
+        <button
+          id="tab_settings_domains"
+          onClick={() => setActiveTab('domains')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'domains'
+              ? 'border-blue-600 text-blue-800 bg-blue-50/70 rounded-t-lg font-black'
+              : 'border-transparent text-[#64748B] hover:text-[#1A1D21]'
+          }`}
+        >
+          <Globe className="w-4 h-4 text-blue-600" />
+          <span>Domínios & Marca</span>
         </button>
 
         <button
@@ -218,16 +206,31 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
       {activeTab === 'facebook' && (
         <div className="space-y-4">
           {/* Sub-selector */}
-          <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 w-fit">
+          <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 w-fit flex-wrap">
             <button
-              onClick={() => setFacebookSubTab('graph_api')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                facebookSubTab === 'graph_api'
+              onClick={() => setFacebookSubTab('token_validator')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                facebookSubTab === 'token_validator'
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span>Validador & Renovador de Token</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-emerald-400 text-slate-900">
+                1-Clique
+              </span>
+            </button>
+            <button
+              onClick={() => setFacebookSubTab('wizard')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                facebookSubTab === 'wizard'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Páginas & Tokens Oficiais (Graph API)
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Assistente Passo a Passo</span>
             </button>
             <button
               onClick={() => setFacebookSubTab('apps')}
@@ -237,14 +240,32 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Aplicativos Meta (App IDs & Secrets)
+              Aplicativos Cadastrados
+            </button>
+            <button
+              onClick={() => setFacebookSubTab('graph_api')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                facebookSubTab === 'graph_api'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Páginas & Graph API
             </button>
           </div>
 
-          {facebookSubTab === 'graph_api' ? (
+          {facebookSubTab === 'token_validator' ? (
+            <MetaTokenValidator onOpenWizard={() => setFacebookSubTab('wizard')} />
+          ) : facebookSubTab === 'wizard' ? (
+            <MetaAppSetupWizard
+              onAppCreated={() => {
+                setFacebookSubTab('apps');
+              }}
+            />
+          ) : facebookSubTab === 'graph_api' ? (
             <FacebookGraphApiManager />
           ) : (
-            <FacebookAppsManager />
+            <FacebookAppsManager onOpenWizard={() => setFacebookSubTab('wizard')} />
           )}
         </div>
       )}
@@ -255,6 +276,20 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           {/* Sub-selector */}
           <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-xl border border-slate-200 flex-wrap">
             <button
+              onClick={() => setWebhooksSubTab('meta_validator')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                webhooksSubTab === 'meta_validator'
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Webhook className="w-3.5 h-3.5" />
+              <span>Validador Webhook Meta (Instagram/Messenger)</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black bg-blue-500 text-white">
+                Live
+              </span>
+            </button>
+            <button
               onClick={() => setWebhooksSubTab('config')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 webhooksSubTab === 'config'
@@ -263,46 +298,6 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
               }`}
             >
               Configurações & URLs
-            </button>
-            <button
-              onClick={() => setWebhooksSubTab('events')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                webhooksSubTab === 'events'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Subscrição de Eventos
-            </button>
-            <button
-              onClick={() => setWebhooksSubTab('callbacks')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                webhooksSubTab === 'callbacks'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Recepção Externa
-            </button>
-            <button
-              onClick={() => setWebhooksSubTab('signatures')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                webhooksSubTab === 'signatures'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Validação de Assinatura (HMAC)
-            </button>
-            <button
-              onClick={() => setWebhooksSubTab('retries')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                webhooksSubTab === 'retries'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Políticas de Retentativa
             </button>
             <button
               onClick={() => setWebhooksSubTab('logs')}
@@ -315,8 +310,21 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span>Logs ao Vivo</span>
             </button>
+            <button
+              onClick={() => setWebhooksSubTab('advanced')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                webhooksSubTab === 'advanced'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Avançado (HMAC & Subscrições)
+            </button>
           </div>
 
+          {webhooksSubTab === 'meta_validator' && (
+            <MetaWebhooksValidator />
+          )}
           {webhooksSubTab === 'config' && (
             <WebhooksManager
               initialSettings={webhookSettings}
@@ -325,35 +333,53 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
               onOpenLiveChat={onOpenLiveChat}
             />
           )}
-          {webhooksSubTab === 'events' && <WebhookSubscriptions />}
-          {webhooksSubTab === 'callbacks' && <ExternalMessageWebhooksManager />}
-          {webhooksSubTab === 'signatures' && <WebhookSignatureTool />}
-          {webhooksSubTab === 'retries' && <WebhookRetryPolicyManager />}
           {webhooksSubTab === 'logs' && (
             <WebhookLogsViewer
               onOpenFlow={onOpenFlow}
               onOpenLiveChat={onOpenLiveChat}
             />
           )}
+          {webhooksSubTab === 'advanced' && (
+            <div className="space-y-6">
+              <WebhookSignatureTool />
+              <WebhookSubscriptions />
+              <WebhookRetryPolicyManager />
+            </div>
+          )}
         </div>
       )}
 
-      {/* 3. TAB: DOMÍNIOS & MARCA */}
-      {activeTab === 'domains' && (
-        <DomainManager />
-      )}
+      {/* 3. TAB: EQUIPE & CRM */}
+      {activeTab === 'team_crm' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 bg-white p-1.5 rounded-xl border border-slate-200 w-fit">
+            <button
+              onClick={() => setTeamCrmSubTab('team')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                teamCrmSubTab === 'team' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Membros da Equipe & Permissões
+            </button>
+            <button
+              onClick={() => setTeamCrmSubTab('fields')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                teamCrmSubTab === 'fields' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Campos Personalizados ({customFields.length})
+            </button>
+          </div>
 
-      {/* 4. TAB: CAMPOS DO CRM */}
-      {activeTab === 'custom_fields' && (
-        <CustomFieldsManager
-          customFields={customFields}
-          onUpdateCustomFields={onUpdateCustomFields}
-        />
-      )}
-
-      {/* 5. TAB: EQUIPE & PERMISSÕES */}
-      {activeTab === 'team' && (
-        <TeamUserManager />
+          {teamCrmSubTab === 'team' ? (
+            <TeamUserManager />
+          ) : (
+            <CustomFieldsManager
+              customFields={customFields}
+              onUpdateCustomFields={onUpdateCustomFields}
+            />
+          )}
+        </div>
       )}
 
       {/* 6. TAB: INTELIGÊNCIA ARTIFICIAL */}

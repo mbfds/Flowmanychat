@@ -52,46 +52,10 @@ export const TeamUserManager: React.FC = () => {
       const userList = await authService.getUsers(tenant?.id || 'tenant_main');
       if (userList && userList.length > 0) {
         setUsers(userList);
+      } else if (currentUser) {
+        setUsers([currentUser]);
       } else {
-        // Fallback with default team users
-        setUsers([
-          {
-            id: 'usr_super_1',
-            name: 'Administrador Principal',
-            email: 'admin@manyflow.com',
-            role: 'super_admin',
-            tenantId: tenant?.id || 'tenant_main',
-            allowedTenants: [tenant?.id || 'tenant_main'],
-            isActive: true,
-            lastLoginAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          {
-            id: 'usr_mgr_2',
-            name: 'Carlos Oliveira (Gestor de Tráfego)',
-            email: 'gestor@agenciadigital.com',
-            role: 'manager',
-            tenantId: tenant?.id || 'tenant_main',
-            allowedTenants: [tenant?.id || 'tenant_main'],
-            isActive: true,
-            lastLoginAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-            createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          {
-            id: 'usr_agt_3',
-            name: 'Mariana Souza (Suporte Live Chat)',
-            email: 'suporte@atendimento.com',
-            role: 'agent',
-            tenantId: tenant?.id || 'tenant_main',
-            allowedTenants: [tenant?.id || 'tenant_main'],
-            isActive: true,
-            lastLoginAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-            createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
-            updatedAt: new Date().toISOString()
-          }
-        ]);
+        setUsers([]);
       }
     } catch {
       // Ignored

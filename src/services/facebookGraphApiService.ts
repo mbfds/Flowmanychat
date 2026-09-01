@@ -121,66 +121,7 @@ export const GRAPH_PERMISSIONS_CATALOG: FacebookGraphPermissionDef[] = [
   }
 ];
 
-export const INITIAL_LINKED_PAGES: FacebookPageLinkItem[] = [
-  {
-    id: '109823481920041',
-    name: 'ManyFlow Brasil Oficial',
-    category: 'Empresa de Software & Automações',
-    avatarUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=150&auto=format&fit=crop&q=80',
-    followersCount: 34200,
-    appId: '982736154819203',
-    pageAccessToken: 'EAABwzLIX4NkBAO8kL9Zc2mF01xPl99qA88zXvY...permanente',
-    tokenExpiresAt: 'never',
-    isTokenPermanent: true,
-    instagramBusinessId: '17841401928374619',
-    instagramUsername: '@manyflow.oficial',
-    instagramAvatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    instagramFollowersCount: 48900,
-    isWebhookSubscribed: true,
-    subscribedFields: ['messages', 'messaging_postbacks', 'message_deliveries', 'message_reads', 'message_reactions', 'feed'],
-    tasks: ['MANAGE', 'MESSAGING', 'CREATE_CONTENT', 'ANALYZE'],
-    status: 'connected',
-    tenantId: 'tenant_main',
-    linkedAt: new Date(Date.now() - 15 * 86400000).toISOString(),
-    lastSyncAt: new Date().toISOString(),
-    lastTestResult: {
-      success: true,
-      latencyMs: 42,
-      statusCode: 200,
-      testedAt: new Date().toISOString(),
-      message: 'Graph API v21.0: Página conectada e pronta para automações de Messenger e Instagram Direct.'
-    }
-  },
-  {
-    id: '204918273645129',
-    name: 'Loja Conceito & Moda Premium',
-    category: 'Varejo & Comércio Eletrônico',
-    avatarUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=150&auto=format&fit=crop&q=80',
-    followersCount: 12800,
-    appId: '982736154819203',
-    pageAccessToken: 'EAABwzLIX4NkBAK79pQ81xZ92LmK03xOp...long_lived',
-    tokenExpiresAt: new Date(Date.now() + 52 * 86400000).toISOString(),
-    isTokenPermanent: false,
-    instagramBusinessId: '17841405928172948',
-    instagramUsername: '@lojaconceito.moda',
-    instagramAvatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    instagramFollowersCount: 21300,
-    isWebhookSubscribed: true,
-    subscribedFields: ['messages', 'messaging_postbacks', 'message_deliveries', 'feed'],
-    tasks: ['MANAGE', 'MESSAGING', 'ANALYZE'],
-    status: 'connected',
-    tenantId: 'tenant_main',
-    linkedAt: new Date(Date.now() - 8 * 86400000).toISOString(),
-    lastSyncAt: new Date().toISOString(),
-    lastTestResult: {
-      success: true,
-      latencyMs: 58,
-      statusCode: 200,
-      testedAt: new Date().toISOString(),
-      message: 'Graph API v21.0: Token de 60 dias ativo (52 dias restantes). Webhooks sincronizados com sucesso.'
-    }
-  }
-];
+export const INITIAL_LINKED_PAGES: FacebookPageLinkItem[] = [];
 
 export const facebookGraphApiService = {
   getStoredPages(): FacebookPageLinkItem[] {
@@ -192,8 +133,8 @@ export const facebookGraphApiService = {
     } catch {
       // Ignored
     }
-    localStorage.setItem(STORAGE_KEY_PAGES, JSON.stringify(INITIAL_LINKED_PAGES));
-    return INITIAL_LINKED_PAGES;
+    localStorage.setItem(STORAGE_KEY_PAGES, JSON.stringify([]));
+    return [];
   },
 
   saveStoredPages(pages: FacebookPageLinkItem[]): void {

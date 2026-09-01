@@ -57,17 +57,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const brandName = tenant?.branding?.brandName || 'ManyFlow';
   const primaryColor = tenant?.branding?.primaryColor || '#0084FF';
 
-  const navItems = [
-    { id: 'flows' as NavigationTab, label: 'Fluxos de Automação', icon: GitFork, badge: '5 ativos' },
-    { id: 'triggers' as NavigationTab, label: 'Gatilhos & Palavras-Chave', icon: Zap, badge: '4' },
-    { id: 'comment_tools' as NavigationTab, label: 'Comentário ➔ Direct', icon: MessageSquareReply, badge: 'Reels & Posts' },
-    { id: 'ab_testing' as NavigationTab, label: 'Testes A/B Comparador', icon: Split, badge: 'Novo', highlight: true },
-    { id: 'whatsapp_groups' as NavigationTab, label: 'Grupos WhatsApp VIP', icon: Users, badge: 'R$ 243k' },
-    { id: 'broadcast' as NavigationTab, label: 'Transmissão (Broadcast)', icon: Radio },
-    { id: 'inbox' as NavigationTab, label: 'Atendimento ao Vivo', icon: Inbox, badge: unreadConversationsCount > 0 ? `${unreadConversationsCount}` : undefined, highlight: unreadConversationsCount > 0 },
-    { id: 'contacts' as NavigationTab, label: 'Audiência & CRM', icon: Users, badge: '4.2k' },
-    { id: 'analytics' as NavigationTab, label: 'Métricas & Conversão', icon: BarChart3 },
-    { id: 'settings' as NavigationTab, label: 'Configurações & Deploy', icon: Settings }
+  const navGroups = [
+    {
+      title: 'Automações',
+      items: [
+        { id: 'flows' as NavigationTab, label: 'Fluxos de Automação', icon: GitFork, badge: '5' },
+        { id: 'triggers' as NavigationTab, label: 'Gatilhos & Palavras-Chave', icon: Zap, badge: '4' },
+        { id: 'comment_tools' as NavigationTab, label: 'Comentário ➔ Direct', icon: MessageSquareReply },
+        { id: 'ab_testing' as NavigationTab, label: 'Testes A/B', icon: Split }
+      ]
+    },
+    {
+      title: 'Conversas & Canais',
+      items: [
+        { id: 'inbox' as NavigationTab, label: 'Atendimento ao Vivo', icon: Inbox, badge: unreadConversationsCount > 0 ? `${unreadConversationsCount}` : undefined, highlight: unreadConversationsCount > 0 },
+        { id: 'whatsapp_groups' as NavigationTab, label: 'Grupos VIP', icon: Users },
+        { id: 'broadcast' as NavigationTab, label: 'Transmissão', icon: Radio }
+      ]
+    },
+    {
+      title: 'Dados & Gestão',
+      items: [
+        { id: 'contacts' as NavigationTab, label: 'Audiência & CRM', icon: Users, badge: '4.2k' },
+        { id: 'analytics' as NavigationTab, label: 'Métricas & Conversão', icon: BarChart3 },
+        { id: 'settings' as NavigationTab, label: 'Configurações', icon: Settings }
+      ]
+    }
   ];
 
   return (
@@ -220,49 +235,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Navigation List */}
-        <nav className="p-3 space-y-1">
-          <div className="text-[10px] font-bold text-[#64748B] dark:text-slate-400 uppercase tracking-wider mb-2 px-2">
-            Menu Principal
-          </div>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentTab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`nav_${item.id}`}
-                onClick={() => onChangeTab(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-all group cursor-pointer ${
-                  isActive
-                    ? 'bg-[#F0F7FF] dark:bg-blue-950/50 text-[#0084FF] dark:text-blue-400 font-semibold border border-blue-100/80 dark:border-blue-900/50 shadow-xs'
-                    : 'text-[#64748B] dark:text-slate-400 hover:text-[#1A1D21] dark:hover:text-white hover:bg-gray-50 dark:hover:bg-slate-800/60'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Icon
-                    className={`w-4 h-4 transition-transform group-hover:scale-105 ${
-                      isActive ? 'text-[#0084FF] dark:text-blue-400' : 'text-[#64748B] dark:text-slate-400'
-                    }`}
-                  />
-                  <span>{item.label}</span>
-                </div>
-                {item.badge && (
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                      item.highlight
-                        ? 'bg-emerald-500 text-white font-bold animate-pulse'
-                        : isActive
-                        ? 'bg-blue-100 dark:bg-blue-900/60 text-[#0084FF] dark:text-blue-300'
-                        : 'bg-gray-100 dark:bg-slate-800 text-[#64748B] dark:text-slate-400'
+        {/* Navigation Groups */}
+        <nav className="p-3 space-y-4">
+          {navGroups.map((group, gIdx) => (
+            <div key={group.title} className="space-y-1">
+              <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-2.5 pb-0.5">
+                {group.title}
+              </div>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = currentTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    id={`nav_${item.id}`}
+                    onClick={() => onChangeTab(item.id)}
+                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium transition-all group cursor-pointer ${
+                      isActive
+                        ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-bold shadow-2xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
                     }`}
                   >
-                    {item.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+                    <div className="flex items-center gap-2.5">
+                      <Icon
+                        className={`w-4 h-4 transition-transform group-hover:scale-105 ${
+                          isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 group-hover:text-slate-600'
+                        }`}
+                      />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span
+                        className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
+                          item.highlight
+                            ? 'bg-rose-500 text-white animate-pulse'
+                            : isActive
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                        }`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
       </div>
 

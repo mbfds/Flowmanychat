@@ -187,54 +187,8 @@ export async function getDb(): Promise<Db | null> {
         await dbInstance.collection("tenants").insertOne(defaultTenant);
       }
 
-      // Seed Gestor Agência and Atendente
-      const usersCol = dbInstance.collection("users");
-      const usersToSeed = [
-        {
-          id: "usr_gestor_agencia",
-          name: "Gestor de Agência",
-          email: "gestor@agenciadigital.com",
-          passwordHash: "admin123",
-          role: "manager",
-          tenantId: "tenant_main",
-          allowedTenants: ["tenant_main"],
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: "usr_atendente_demo",
-          name: "Camila Atendente",
-          email: "suporte@atendimento.com",
-          passwordHash: "admin123",
-          role: "agent",
-          tenantId: "tenant_main",
-          allowedTenants: ["tenant_main"],
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        },
-        {
-          id: "usr_admin_default",
-          name: "Administrador ManyFlow",
-          email: "admin@manyflow.com",
-          passwordHash: "admin123",
-          role: "super_admin",
-          tenantId: "tenant_main",
-          allowedTenants: ["tenant_main"],
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      ];
-
-      for (const u of usersToSeed) {
-        const exists = await usersCol.findOne({ email: u.email });
-        if (!exists) {
-          await usersCol.insertOne(u);
-        }
-      }
-      console.log("[MongoDB] ✅ Usuários demo (Gestor de Agência e Atendente) prontos.");
+      // Initialize collections cleanly without demo users
+      console.log("[MongoDB] ✅ Banco de dados inicializado com sucesso.");
     } catch {
       // Handled gracefully
     }
