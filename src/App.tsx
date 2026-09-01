@@ -100,6 +100,7 @@ function MainApp() {
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isZenMode, setIsZenMode] = useState(false);
 
   // Sync with MongoDB Service on Mount
   useEffect(() => {
@@ -241,6 +242,72 @@ function MainApp() {
     }
   };
 
+  const handleRestoreBackup = (backupData: any, mode: 'replace' | 'merge') => {
+    try {
+      const newFlows = backupData.data?.flows || backupData.flows;
+      const newContacts = backupData.data?.contacts || backupData.contacts;
+      const newFields = backupData.data?.customFields || backupData.customFields;
+      const newTriggers = backupData.data?.triggers || backupData.triggers;
+      const newKB = backupData.data?.knowledgeBase || backupData.knowledgeBase;
+      const newGrowthTools = backupData.data?.growthTools || backupData.growthTools;
+      const newBroadcasts = backupData.data?.broadcasts || backupData.broadcasts;
+      const newWebhookSettings = backupData.data?.webhookSettings || backupData.webhookSettings;
+
+      if (mode === 'replace') {
+        if (Array.isArray(newFlows) && newFlows.length > 0) {
+          setFlows(newFlows);
+          dbService.saveFlowsBulk(newFlows).catch(() => {});
+        }
+        if (Array.isArray(newContacts) && newContacts.length > 0) {
+          setContacts(newContacts);
+          dbService.saveContactsBatch(newContacts).catch(() => {});
+        }
+        if (Array.isArray(newFields) && newFields.length > 0) setCustomFields(newFields);
+        if (Array.isArray(newTriggers) && newTriggers.length > 0) setTriggers(newTriggers);
+        if (newKB) setKnowledgeBase(newKB);
+        if (Array.isArray(newGrowthTools) && newGrowthTools.length > 0) setGrowthTools(newGrowthTools);
+        if (Array.isArray(newBroadcasts) && newBroadcasts.length > 0) setBroadcasts(newBroadcasts);
+        if (newWebhookSettings) setWebhookSettings(newWebhookSettings);
+      } else {
+        // Merge mode
+        if (Array.isArray(newFlows) && newFlows.length > 0) {
+          setFlows(prev => {
+            const existingIds = new Set(prev.map(f => f.id));
+            const toAdd = newFlows.filter((f: Flow) => !existingIds.has(f.id));
+            const merged = [...prev, ...toAdd];
+            dbService.saveFlowsBulk(merged).catch(() => {});
+            return merged;
+          });
+        }
+        if (Array.isArray(newContacts) && newContacts.length > 0) {
+          setContacts(prev => {
+            const existingIds = new Set(prev.map(c => c.id));
+            const toAdd = newContacts.filter((c: Contact) => !existingIds.has(c.id));
+            const merged = [...prev, ...toAdd];
+            dbService.saveContactsBatch(merged).catch(() => {});
+            return merged;
+          });
+        }
+        if (Array.isArray(newFields) && newFields.length > 0) {
+          setCustomFields(prev => {
+            const existingKeys = new Set(prev.map(f => f.key));
+            const toAdd = newFields.filter((f: CustomFieldDefinition) => !existingKeys.has(f.key));
+            return [...prev, ...toAdd];
+          });
+        }
+        if (Array.isArray(newTriggers) && newTriggers.length > 0) {
+          setTriggers(prev => {
+            const existingIds = new Set(prev.map(t => t.id));
+            const toAdd = newTriggers.filter((t: KeywordTrigger) => !existingIds.has(t.id));
+            return [...prev, ...toAdd];
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[App] Erro ao restaurar backup:', err);
+    }
+  };
+
   // If NOT in workspace view, render public Landing Page (Home) or Login/Register portal
   if (!isInWorkspace) {
     return (
@@ -280,35 +347,41 @@ function MainApp() {
     );
   }
 
+  const isInZenMode = currentTab === 'flows' && isZenMode;
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#F8F9FB] text-[#1A1D21] font-sans antialiased">
-      {/* Primary Sidebar */}
-      <Sidebar
-        currentTab={currentTab}
-        onChangeTab={setCurrentTab}
-        selectedChannel={selectedChannel}
-        onSelectChannel={setSelectedChannel}
-        unreadConversationsCount={conversations.filter((c) => c.status === 'human_takeover').length}
-        onOpenSimulator={() => setIsSimulatorOpen(true)}
-        onOpenLoginModal={() => setIsLoginModalOpen(true)}
-        onOpenProfileModal={() => setIsProfileModalOpen(true)}
-        onGoToHome={() => setIsInWorkspace(false)}
-      />
+      {/* Primary Sidebar - Hidden in Zen Mode */}
+      {!isInZenMode && (
+        <Sidebar
+          currentTab={currentTab}
+          onChangeTab={setCurrentTab}
+          selectedChannel={selectedChannel}
+          onSelectChannel={setSelectedChannel}
+          unreadConversationsCount={conversations.filter((c) => c.status === 'human_takeover').length}
+          onOpenSimulator={() => setIsSimulatorOpen(true)}
+          onOpenLoginModal={() => setIsLoginModalOpen(true)}
+          onOpenProfileModal={() => setIsProfileModalOpen(true)}
+          onGoToHome={() => setIsInWorkspace(false)}
+        />
+      )}
 
       {/* Main Content Workspace */}
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#F8F9FB]">
-        {/* Global Header */}
-        <Header
-          currentTab={currentTab}
-          flows={flows}
-          selectedFlowId={selectedFlowId}
-          onSelectFlow={setSelectedFlowId}
-          onCreateNewFlow={handleCreateNewFlow}
-          onOpenSimulator={() => setIsSimulatorOpen(true)}
-          onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
-          onOpenTemplates={() => setIsTemplatesModalOpen(true)}
-          selectedChannel={selectedChannel}
-        />
+        {/* Global Header - Hidden in Zen Mode */}
+        {!isInZenMode && (
+          <Header
+            currentTab={currentTab}
+            flows={flows}
+            selectedFlowId={selectedFlowId}
+            onSelectFlow={setSelectedFlowId}
+            onCreateNewFlow={handleCreateNewFlow}
+            onOpenSimulator={() => setIsSimulatorOpen(true)}
+            onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
+            onOpenTemplates={() => setIsTemplatesModalOpen(true)}
+            selectedChannel={selectedChannel}
+          />
+        )}
 
         {/* Tab View Routing */}
         <main className="flex-1 flex overflow-hidden bg-[#F8F9FB]">
@@ -335,6 +408,8 @@ function MainApp() {
                 openAIGenerator={() => setIsAIGeneratorOpen(true)}
                 openTemplates={() => setIsTemplatesModalOpen(true)}
                 customFields={customFields}
+                isZenMode={isZenMode}
+                onToggleZenMode={setIsZenMode}
               />
             )}
 
@@ -398,6 +473,7 @@ function MainApp() {
                   setIsSimulatorOpen(true);
                 }}
                 onUpdateFlow={handleUpdateFlow}
+                onNavigateTab={setCurrentTab}
               />
             )}
 
@@ -433,6 +509,14 @@ function MainApp() {
                 onUpdateCustomFields={setCustomFields}
                 webhookSettings={webhookSettings}
                 onUpdateWebhookSettings={setWebhookSettings}
+                flows={flows}
+                onUpdateFlows={setFlows}
+                contacts={contacts}
+                onUpdateContacts={handleUpdateContacts}
+                triggers={triggers}
+                growthTools={growthTools}
+                broadcasts={broadcasts}
+                onRestoreBackup={handleRestoreBackup}
                 onOpenFlow={(flowId) => {
                   setSelectedFlowId(flowId);
                   setCurrentTab('flows');

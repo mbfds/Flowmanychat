@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, 
   ZoomIn, 
@@ -21,7 +21,13 @@ import {
   Clock,
   Layers,
   TrendingUp,
-  BarChart2
+  BarChart2,
+  Maximize2,
+  Minimize2,
+  Eye,
+  EyeOff,
+  Sun,
+  Compass
 } from 'lucide-react';
 import { Flow, FlowNode, FlowConnection, NodeType, CustomFieldDefinition } from '../../types';
 import { FlowNodeCard } from './FlowNodeCard';
@@ -36,6 +42,8 @@ interface FlowCanvasProps {
   openAIGenerator: () => void;
   openTemplates?: () => void;
   customFields?: CustomFieldDefinition[];
+  isZenMode?: boolean;
+  onToggleZenMode?: (isZen: boolean) => void;
 }
 
 export const FlowCanvas: React.FC<FlowCanvasProps> = ({
@@ -44,8 +52,19 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
   openSimulator,
   openAIGenerator,
   openTemplates,
-  customFields = []
+  customFields = [],
+  isZenMode: externalZenMode,
+  onToggleZenMode
 }) => {
+  const [internalZenMode, setInternalZenMode] = useState(false);
+  const isZenMode = externalZenMode !== undefined ? externalZenMode : internalZenMode;
+
+  const setZenMode = (val: boolean) => {
+    setInternalZenMode(val);
+    if (onToggleZenMode) onToggleZenMode(val);
+  };
+
+  const [showZenToast, setShowZenToast] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null);
   const [isSaved, setIsSaved] = useState(false);
@@ -53,6 +72,26 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [showPerformanceOverlay, setShowPerformanceOverlay] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Keyboard shortcut listener for ESC to exit Zen mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isZenMode) {
+        setZenMode(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isZenMode]);
+
+  const handleToggleZen = () => {
+    const nextVal = !isZenMode;
+    setZenMode(nextVal);
+    if (nextVal) {
+      setShowZenToast(true);
+      setTimeout(() => setShowZenToast(false), 3500);
+    }
+  };
 
   const handleZoomIn = () => setZoom((prev) => Math.min(prev + 0.15, 1.6));
   const handleZoomOut = () => setZoom((prev) => Math.max(prev - 0.15, 0.6));
@@ -190,129 +229,187 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#F8F9FB] overflow-hidden relative select-none">
-      {/* Top Toolbar */}
-      <div className="h-14 bg-white border-b border-[#E2E8F0] px-6 flex items-center justify-between z-10 shrink-0 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-[#1A1D21] max-w-md truncate">
-              {flow.title}
-            </h2>
-            <div className="flex items-center gap-1.5">
-              {flow.channel === 'instagram' && (
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-pink-50 text-pink-700 border border-pink-200">
-                  Instagram Direct
-                </span>
-              )}
-              {flow.channel === 'messenger' && (
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-50 text-blue-700 border border-blue-200">
-                  FB Messenger
-                </span>
-              )}
-              {flow.channel === 'omnichannel' && (
-                <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-purple-50 text-purple-700 border border-purple-200">
-                  Omnichannel
-                </span>
-              )}
+      {/* Zen Mode Banner Toast */}
+      {showZenToast && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 text-white text-xs px-4 py-2 rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-200">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" style={{ animationDuration: '3s' }} />
+          <span><strong>Modo Zen Ativo</strong> — Visualização limpa para foco total. Pressione <strong>ESC</strong> para sair.</span>
+        </div>
+      )}
+
+      {/* Top Toolbar: Render Standard OR Zen Floating Island */}
+      {!isZenMode ? (
+        <div className="h-14 bg-white dark:bg-slate-900 border-b border-[#E2E8F0] dark:border-slate-800 px-6 flex items-center justify-between z-10 shrink-0 shadow-xs transition-colors">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-[#1A1D21] dark:text-white max-w-md truncate">
+                {flow.title}
+              </h2>
+              <div className="flex items-center gap-1.5">
+                {flow.channel === 'instagram' && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-pink-50 text-pink-700 border border-pink-200">
+                    Instagram Direct
+                  </span>
+                )}
+                {flow.channel === 'messenger' && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-blue-50 text-blue-700 border border-blue-200">
+                    FB Messenger
+                  </span>
+                )}
+                {flow.channel === 'omnichannel' && (
+                  <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-purple-50 text-purple-700 border border-purple-200">
+                    Omnichannel
+                  </span>
+                )}
+              </div>
             </div>
+
+            {/* Active Status Switch */}
+            <button
+              id="btn_toggle_flow_status"
+              onClick={handleToggleActive}
+              className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                flow.isActive
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-gray-100 text-[#64748B] border border-gray-200'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${flow.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+              <span>{flow.isActive ? 'Fluxo Ativo' : 'Pausado'}</span>
+            </button>
           </div>
 
-          {/* Active Status Switch */}
-          <button
-            id="btn_toggle_flow_status"
-            onClick={handleToggleActive}
-            className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-              flow.isActive
-                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                : 'bg-gray-100 text-[#64748B] border border-gray-200'
-            }`}
-          >
-            <span className={`w-2 h-2 rounded-full ${flow.isActive ? 'bg-emerald-500' : 'bg-gray-400'}`} />
-            <span>{flow.isActive ? 'Fluxo Ativo' : 'Pausado'}</span>
-          </button>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {/* Quick Stats Pill with Performance Overlay Toggle */}
-          <button
-            id="btn_toggle_performance_overlay"
-            onClick={() => setShowPerformanceOverlay(!showPerformanceOverlay)}
-            className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold transition-all cursor-pointer shadow-xs ${
-              showPerformanceOverlay 
-                ? 'bg-blue-600 text-white border-blue-700 shadow-blue-500/20' 
-                : 'bg-[#F8F9FB] hover:bg-slate-100 border-[#E2E8F0] text-[#1A1D21]'
-            }`}
-            title="Abrir Gráfico de Performance e Métricas em Tempo Real"
-          >
-            <TrendingUp className={`w-3.5 h-3.5 ${showPerformanceOverlay ? 'text-white' : 'text-blue-600'}`} />
-            <span>Métricas: <strong className={showPerformanceOverlay ? 'text-white' : 'text-emerald-600'}>{flow.stats.ctr}% CTR</strong></span>
-            <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${showPerformanceOverlay ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700'}`}>
-              {showPerformanceOverlay ? 'Ocultar' : 'Gráfico'}
-            </span>
-          </button>
-
-          {/* Ready-made Templates CTA */}
-          {openTemplates && (
+          {/* Action Controls */}
+          <div className="flex items-center gap-2">
+            {/* Zen Mode Toggle Button */}
             <button
-              id="btn_canvas_templates"
-              onClick={openTemplates}
-              className="py-1.5 px-3 rounded-md bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-pink-500/15 hover:from-amber-500/25 hover:to-pink-500/25 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-102"
-              title="Explorar Modelos Prontos (Influenciador, Infoproduto, E-commerce e AdSense)"
+              id="btn_toggle_zen_mode"
+              onClick={handleToggleZen}
+              className="py-1.5 px-3 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+              title="Ativar Modo Zen (Esconder ferramentas e focar na edição)"
             >
-              <Zap className="w-3.5 h-3.5 fill-current text-amber-500" />
-              <span>Modelos Prontos</span>
+              <Maximize2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span className="hidden sm:inline">Modo Zen</span>
             </button>
-          )}
 
-          {/* Voice-to-Flow Builder Button */}
-          <button
-            id="btn_open_voice_to_flow"
-            onClick={() => setIsVoiceModalOpen(true)}
-            className="py-1.5 px-3 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-102"
-            title="Criar blocos de fluxo falando ao microfone"
-          >
-            <Mic className="w-3.5 h-3.5 animate-pulse" />
-            <span>Voice-to-Flow</span>
-          </button>
+            {/* Quick Stats Pill with Performance Overlay Toggle */}
+            <button
+              id="btn_toggle_performance_overlay"
+              onClick={() => setShowPerformanceOverlay(!showPerformanceOverlay)}
+              className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold transition-all cursor-pointer shadow-xs ${
+                showPerformanceOverlay 
+                  ? 'bg-blue-600 text-white border-blue-700 shadow-blue-500/20' 
+                  : 'bg-[#F8F9FB] hover:bg-slate-100 border-[#E2E8F0] text-[#1A1D21] dark:text-slate-300 dark:bg-slate-800'
+              }`}
+              title="Abrir Gráfico de Performance e Métricas em Tempo Real"
+            >
+              <TrendingUp className={`w-3.5 h-3.5 ${showPerformanceOverlay ? 'text-white' : 'text-blue-600'}`} />
+              <span>Métricas: <strong className={showPerformanceOverlay ? 'text-white' : 'text-emerald-600'}>{flow.stats.ctr}% CTR</strong></span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${showPerformanceOverlay ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-700'}`}>
+                {showPerformanceOverlay ? 'Ocultar' : 'Gráfico'}
+              </span>
+            </button>
 
-          {/* AI Optimizer */}
-          <button
-            onClick={openAIGenerator}
-            className="py-1.5 px-3 rounded-md bg-[#F0F7FF] border border-blue-200 text-[#0084FF] hover:bg-blue-100/70 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#0084FF]" />
-            <span className="hidden sm:inline">IA Generator</span>
-          </button>
+            {/* Ready-made Templates CTA */}
+            {openTemplates && (
+              <button
+                id="btn_canvas_templates"
+                onClick={openTemplates}
+                className="py-1.5 px-3 rounded-md bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-pink-500/15 hover:from-amber-500/25 hover:to-pink-500/25 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-102"
+                title="Explorar Modelos Prontos"
+              >
+                <Zap className="w-3.5 h-3.5 fill-current text-amber-500" />
+                <span>Modelos Prontos</span>
+              </button>
+            )}
 
-          {/* Export JSON */}
-          <button
-            onClick={handleExportJSON}
-            title="Exportar Fluxo (JSON)"
-            className="p-1.5 rounded-md bg-white hover:bg-gray-50 border border-[#E2E8F0] text-[#64748B] hover:text-[#1A1D21] transition-colors shadow-xs cursor-pointer"
-          >
-            <Download className="w-4 h-4" />
-          </button>
+            {/* Voice-to-Flow Builder Button */}
+            <button
+              id="btn_open_voice_to_flow"
+              onClick={() => setIsVoiceModalOpen(true)}
+              className="py-1.5 px-3 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer hover:scale-102"
+              title="Criar blocos de fluxo falando ao microfone"
+            >
+              <Mic className="w-3.5 h-3.5 animate-pulse" />
+              <span className="hidden md:inline">Voice-to-Flow</span>
+            </button>
 
-          {/* Save / Publish */}
+            {/* AI Optimizer */}
+            <button
+              onClick={openAIGenerator}
+              className="py-1.5 px-3 rounded-md bg-[#F0F7FF] border border-blue-200 text-[#0084FF] hover:bg-blue-100/70 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-[#0084FF]" />
+              <span className="hidden sm:inline">IA Generator</span>
+            </button>
+
+            {/* Export JSON */}
+            <button
+              onClick={handleExportJSON}
+              title="Exportar Fluxo (JSON)"
+              className="p-1.5 rounded-md bg-white hover:bg-gray-50 border border-[#E2E8F0] text-[#64748B] hover:text-[#1A1D21] transition-colors shadow-xs cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+
+            {/* Save / Publish */}
+            <button
+              onClick={handleSaveFlow}
+              className="py-1.5 px-3 rounded-md bg-white hover:bg-gray-50 border border-[#E2E8F0] text-[#1A1D21] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            >
+              {isSaved ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Save className="w-3.5 h-3.5 text-[#64748B]" />}
+              <span>{isSaved ? 'Publicado!' : 'Publicar'}</span>
+            </button>
+
+            {/* Test in Simulator CTA */}
+            <button
+              id="btn_canvas_test_simulator"
+              onClick={openSimulator}
+              className="py-1.5 px-3.5 rounded-md bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Testar</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Minimalist Zen Mode Floating Header */
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-full border border-slate-200 dark:border-slate-700 shadow-xl">
+          <div className="flex items-center gap-2 pr-3 border-r border-slate-200 dark:border-slate-700">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+            <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400">Modo Zen</span>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 max-w-[160px] truncate">
+              {flow.title}
+            </span>
+          </div>
+
           <button
             onClick={handleSaveFlow}
-            className="py-1.5 px-3 rounded-md bg-white hover:bg-gray-50 border border-[#E2E8F0] text-[#1A1D21] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+            className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+            title="Salvar alterações"
           >
-            {isSaved ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Save className="w-3.5 h-3.5 text-[#64748B]" />}
-            <span>{isSaved ? 'Publicado!' : 'Publicar'}</span>
+            {isSaved ? <Check className="w-4 h-4 text-emerald-600" /> : <Save className="w-4 h-4" />}
           </button>
 
-          {/* Test in Simulator CTA */}
           <button
-            id="btn_canvas_test_simulator"
             onClick={openSimulator}
-            className="py-1.5 px-3.5 rounded-md bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            className="p-1.5 rounded-full hover:bg-blue-50 text-blue-600 transition-colors"
+            title="Testar no simulador"
           >
-            <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Testar no Celular</span>
+            <Play className="w-4 h-4 fill-current" />
+          </button>
+
+          <button
+            id="btn_exit_zen_mode"
+            onClick={handleToggleZen}
+            className="ml-1 pl-2 border-l border-slate-200 dark:border-slate-700 flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
+            title="Sair do Modo Zen (ESC)"
+          >
+            <Minimize2 className="w-3.5 h-3.5 text-slate-500" />
+            <span>Sair (ESC)</span>
           </button>
         </div>
-      </div>
+      )}
 
       {/* Main Canvas Area */}
       <div

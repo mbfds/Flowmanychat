@@ -54,36 +54,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user, tenant, tenants, switchTenant, logout } = useAuth();
   const [showWorkspaceMenu, setShowWorkspaceMenu] = useState(false);
 
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(
+    currentTab === 'ab_testing' || currentTab === 'whatsapp_groups' || currentTab === 'broadcast'
+  );
+
   const brandName = tenant?.branding?.brandName || 'ManyFlow';
   const primaryColor = tenant?.branding?.primaryColor || '#0084FF';
 
-  const navGroups = [
-    {
-      title: 'Automações',
-      items: [
-        { id: 'flows' as NavigationTab, label: 'Fluxos de Automação', icon: GitFork, badge: '5' },
-        { id: 'triggers' as NavigationTab, label: 'Gatilhos & Palavras-Chave', icon: Zap, badge: '4' },
-        { id: 'comment_tools' as NavigationTab, label: 'Comentário ➔ Direct', icon: MessageSquareReply },
-        { id: 'ab_testing' as NavigationTab, label: 'Testes A/B', icon: Split }
-      ]
-    },
-    {
-      title: 'Conversas & Canais',
-      items: [
-        { id: 'inbox' as NavigationTab, label: 'Atendimento ao Vivo', icon: Inbox, badge: unreadConversationsCount > 0 ? `${unreadConversationsCount}` : undefined, highlight: unreadConversationsCount > 0 },
-        { id: 'whatsapp_groups' as NavigationTab, label: 'Grupos VIP', icon: Users },
-        { id: 'broadcast' as NavigationTab, label: 'Transmissão', icon: Radio }
-      ]
-    },
-    {
-      title: 'Dados & Gestão',
-      items: [
-        { id: 'contacts' as NavigationTab, label: 'Audiência & CRM', icon: Users, badge: '4.2k' },
-        { id: 'analytics' as NavigationTab, label: 'Métricas & Conversão', icon: BarChart3 },
-        { id: 'settings' as NavigationTab, label: 'Configurações', icon: Settings }
-      ]
-    }
+  // Primary High-Focus Navigation Items
+  const primaryNavItems = [
+    { id: 'flows' as NavigationTab, label: 'Fluxos de Automação', icon: GitFork, badge: '5' },
+    { id: 'triggers' as NavigationTab, label: 'Gatilhos & Palavras-Chave', icon: Zap, badge: '4' },
+    { id: 'comment_tools' as NavigationTab, label: 'Comentário ➔ Direct', icon: MessageSquareReply },
+    { id: 'inbox' as NavigationTab, label: 'Atendimento ao Vivo', icon: Inbox, badge: unreadConversationsCount > 0 ? `${unreadConversationsCount}` : undefined, highlight: unreadConversationsCount > 0 },
+    { id: 'contacts' as NavigationTab, label: 'Audiência & CRM', icon: Users, badge: '4.2k' },
+    { id: 'analytics' as NavigationTab, label: 'Resumo do Dia & Métricas', icon: BarChart3 }
   ];
+
+  // Secondary Low-Usage Items Grouped in Advanced Tools
+  const advancedNavItems = [
+    { id: 'ab_testing' as NavigationTab, label: 'Testes A/B Comparador', icon: Split, badge: 'Otimização' },
+    { id: 'whatsapp_groups' as NavigationTab, label: 'Grupos VIP WhatsApp', icon: MessageCircle },
+    { id: 'broadcast' as NavigationTab, label: 'Transmissão em Massa', icon: Radio }
+  ];
+
+  const isCurrentTabInAdvanced = advancedNavItems.some((item) => item.id === currentTab);
 
   return (
     <aside id="main_sidebar" className="w-64 bg-white dark:bg-slate-900 border-r border-[#E2E8F0] dark:border-slate-800 flex flex-col justify-between h-screen shrink-0 select-none z-30 shadow-[1px_0_4px_rgba(0,0,0,0.02)] transition-colors">
@@ -235,53 +230,128 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        {/* Navigation Groups */}
-        <nav className="p-3 space-y-4">
-          {navGroups.map((group, gIdx) => (
-            <div key={group.title} className="space-y-1">
-              <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-2.5 pb-0.5">
-                {group.title}
-              </div>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const isActive = currentTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    id={`nav_${item.id}`}
-                    onClick={() => onChangeTab(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium transition-all group cursor-pointer ${
-                      isActive
-                        ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-bold shadow-2xs'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Icon
-                        className={`w-4 h-4 transition-transform group-hover:scale-105 ${
-                          isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 group-hover:text-slate-600'
-                        }`}
-                      />
-                      <span>{item.label}</span>
-                    </div>
-                    {item.badge && (
-                      <span
-                        className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold ${
-                          item.highlight
-                            ? 'bg-rose-500 text-white animate-pulse'
-                            : isActive
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+        {/* Navigation Section */}
+        <nav className="p-3 space-y-3">
+          {/* Main Automation & Engagement Navigation */}
+          <div className="space-y-0.5">
+            <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-2.5 pb-1">
+              Automações & Conversas
             </div>
-          ))}
+            {primaryNavItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  id={`nav_${item.id}`}
+                  onClick={() => onChangeTab(item.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group cursor-pointer ${
+                    isActive
+                      ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold shadow-2xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 truncate">
+                    <Icon
+                      className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-105 ${
+                        isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 group-hover:text-slate-600'
+                      }`}
+                    />
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                  {item.badge && (
+                    <span
+                      className={`px-1.5 py-0.2 rounded-md text-[10px] font-bold shrink-0 ${
+                        item.highlight
+                          ? 'bg-rose-500 text-white animate-pulse'
+                          : isActive
+                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                      }`}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Collapsible Advanced Tools Dropdown */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              id="btn_toggle_advanced_tools"
+              onClick={() => setIsAdvancedOpen(!isAdvancedOpen)}
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                isCurrentTabInAdvanced
+                  ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50/70 dark:bg-indigo-950/40'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                <span className="font-bold">Ferramentas Avançadas</span>
+                {isCurrentTabInAdvanced && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />
+                )}
+              </div>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isAdvancedOpen ? 'rotate-180 text-indigo-600' : 'text-slate-400'}`} />
+            </button>
+
+            {/* Sub-items list */}
+            {isAdvancedOpen && (
+              <div className="mt-1 pl-2 space-y-0.5 border-l-2 border-indigo-100 dark:border-indigo-900/50 ml-3 py-0.5">
+                {advancedNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      id={`nav_${item.id}`}
+                      onClick={() => onChangeTab(item.id)}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {item.badge && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Settings Section */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              id="nav_settings"
+              onClick={() => onChangeTab('settings')}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all group cursor-pointer ${
+                currentTab === 'settings'
+                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold shadow-2xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/60'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Settings
+                  className={`w-4 h-4 transition-transform group-hover:rotate-45 ${
+                    currentTab === 'settings' ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 group-hover:text-slate-600'
+                  }`}
+                />
+                <span>Configurações & Conexões</span>
+              </div>
+            </button>
+          </div>
         </nav>
       </div>
 

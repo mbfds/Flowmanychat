@@ -22,11 +22,14 @@ import {
   TrendingDown,
   Split,
   Tag,
-  Trophy
+  Trophy,
+  Sun,
+  LayoutDashboard
 } from 'lucide-react';
 import { Flow, BroadcastCampaign, Contact, LiveConversation } from '../../types';
 import { ComponentLoader } from '../Common/ComponentLoader';
 import { PerformanceSummaryHeader } from './PerformanceSummaryHeader';
+import { DailySummaryView } from './DailySummaryView';
 
 const FlowFunnelView = lazy(() =>
   import('./FlowFunnelView').then((m) => ({ default: m.FlowFunnelView }))
@@ -44,6 +47,7 @@ interface AnalyticsDashboardProps {
   onSelectFlow?: (flowId: string) => void;
   onOpenSimulator?: (flowId?: string) => void;
   onUpdateFlow?: (updatedFlow: Flow) => void;
+  onNavigateTab?: (tab: string) => void;
 }
 
 export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({ 
@@ -54,9 +58,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   selectedFlowId,
   onSelectFlow,
   onOpenSimulator,
-  onUpdateFlow
+  onUpdateFlow,
+  onNavigateTab
 }) => {
-  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'funnel' | 'overview' | 'ab_testing' | 'bottlenecks'>('funnel');
+  // Default to 'summary' (Resumo do Dia) as requested
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'summary' | 'funnel' | 'overview' | 'ab_testing' | 'bottlenecks'>('summary');
   const [targetFlowForFunnel, setTargetFlowForFunnel] = useState<string>(
     selectedFlowId || flows[0]?.id || ''
   );
@@ -143,7 +149,25 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       {/* Secondary Navigation Subheader */}
       <div className="bg-white border-b border-[#E2E8F0] px-6 py-3 flex flex-wrap items-center justify-between gap-3 shrink-0 sticky top-0 z-10 shadow-2xs">
         <div className="flex items-center gap-1.5 bg-[#F8F9FB] p-1 rounded-xl border border-[#E2E8F0] overflow-x-auto">
+          {/* TAB 0: RESUMO DO DIA (Default) */}
           <button
+            id="tab_analytics_summary"
+            onClick={() => setActiveAnalyticsTab('summary')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeAnalyticsTab === 'summary'
+                ? 'bg-white text-blue-600 shadow-xs border border-blue-100 font-extrabold'
+                : 'text-[#64748B] hover:text-[#1A1D21]'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 text-blue-600" />
+            <span>Resumo do Dia</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 font-bold">
+              3 Principais
+            </span>
+          </button>
+
+          <button
+            id="tab_analytics_funnel"
             onClick={() => setActiveAnalyticsTab('funnel')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAnalyticsTab === 'funnel'
@@ -152,13 +176,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             }`}
           >
             <BarChart2 className="w-3.5 h-3.5" />
-            <span>Visualização de Funil (Nó a Nó)</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 font-bold">
-              Novo
-            </span>
+            <span>Funil Nó a Nó</span>
           </button>
 
           <button
+            id="tab_analytics_overview"
             onClick={() => setActiveAnalyticsTab('overview')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAnalyticsTab === 'overview'
@@ -167,10 +189,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Visão Geral & Fluxos Ativos</span>
+            <span>Visão Geral & Fluxos</span>
           </button>
 
           <button
+            id="tab_analytics_ab"
             onClick={() => setActiveAnalyticsTab('ab_testing')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAnalyticsTab === 'ab_testing'
@@ -179,13 +202,11 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             }`}
           >
             <Split className="w-3.5 h-3.5 text-fuchsia-600" />
-            <span>Testes A/B (Boas-Vindas)</span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-fuchsia-100 text-fuchsia-800 font-bold">
-              🏆 Variações
-            </span>
+            <span>Testes A/B</span>
           </button>
 
           <button
+            id="tab_analytics_bottlenecks"
             onClick={() => setActiveAnalyticsTab('bottlenecks')}
             className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
               activeAnalyticsTab === 'bottlenecks'
@@ -194,7 +215,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            <span>Diagnóstico de Gargalos (IA)</span>
+            <span>Gargalos & IA</span>
           </button>
         </div>
 
@@ -208,6 +229,22 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       {/* Main Tab Content */}
       <div className="flex-1 flex overflow-hidden">
         <Suspense fallback={<ComponentLoader variant="analytics" label="Carregando visualização analítica..." />}>
+        {/* TAB 0: RESUMO DO DIA */}
+        {activeAnalyticsTab === 'summary' && (
+          <DailySummaryView
+            flows={flows}
+            contacts={contacts}
+            conversations={conversations}
+            onOpenFlow={(flowId) => {
+              if (onSelectFlow) onSelectFlow(flowId);
+              if (onNavigateTab) onNavigateTab('flows');
+            }}
+            onOpenSimulator={onOpenSimulator}
+            onViewDetailedAnalytics={() => setActiveAnalyticsTab('funnel')}
+            onNavigateTab={onNavigateTab}
+          />
+        )}
+
         {/* TAB 1: FUNNEL VISUALIZATION (Nó a Nó) */}
         {activeAnalyticsTab === 'funnel' && (
           <FlowFunnelView
