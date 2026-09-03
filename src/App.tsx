@@ -73,10 +73,14 @@ const AdminPackagesManager = lazy(() =>
 
 import {
   INITIAL_FLOWS,
+  DEMO_FLOWS,
   INITIAL_TRIGGERS,
+  DEMO_TRIGGERS,
   INITIAL_COMMENT_TOOLS,
   INITIAL_CONVERSATIONS,
+  DEMO_CONVERSATIONS,
   INITIAL_CONTACTS,
+  DEMO_CONTACTS,
   INITIAL_KNOWLEDGE_BASE,
   INITIAL_CUSTOM_FIELDS,
   INITIAL_BROADCASTS,
@@ -87,6 +91,7 @@ import { NavigationTab, Flow, KeywordTrigger, PostCommentGrowthTool, LiveConvers
 
 function MainApp() {
   const { user, tenant, isAuthenticated } = useAuth();
+  const isDemo = !isAuthenticated || user?.email === 'demo@manyflow.com' || Boolean(user?.isDemo);
 
   // Public Landing / Workspace View State (defaults to HomePage so user stays on landing page on load)
   const [isInWorkspace, setIsInWorkspace] = useState<boolean>(false);
@@ -95,14 +100,14 @@ function MainApp() {
   // Navigation & View state
   const [currentTab, setCurrentTab] = useState<NavigationTab>('flows');
   const [selectedChannel, setSelectedChannel] = useState<ChannelType>('omnichannel');
-  const [flows, setFlows] = useState<Flow[]>(INITIAL_FLOWS);
-  const [selectedFlowId, setSelectedFlowId] = useState<string>(INITIAL_FLOWS[0]?.id || '');
+  const [flows, setFlows] = useState<Flow[]>(() => isDemo ? DEMO_FLOWS : INITIAL_FLOWS);
+  const [selectedFlowId, setSelectedFlowId] = useState<string>(() => isDemo ? (DEMO_FLOWS[0]?.id || '') : '');
 
   // Growth Tools, Triggers & Live Data states
-  const [triggers, setTriggers] = useState<KeywordTrigger[]>(INITIAL_TRIGGERS);
+  const [triggers, setTriggers] = useState<KeywordTrigger[]>(() => isDemo ? DEMO_TRIGGERS : INITIAL_TRIGGERS);
   const [growthTools, setGrowthTools] = useState<PostCommentGrowthTool[]>(INITIAL_COMMENT_TOOLS);
-  const [conversations, setConversations] = useState<LiveConversation[]>(INITIAL_CONVERSATIONS);
-  const [contacts, setContacts] = useState<Contact[]>(INITIAL_CONTACTS);
+  const [conversations, setConversations] = useState<LiveConversation[]>(() => isDemo ? DEMO_CONVERSATIONS : INITIAL_CONVERSATIONS);
+  const [contacts, setContacts] = useState<Contact[]>(() => isDemo ? DEMO_CONTACTS : INITIAL_CONTACTS);
   const [knowledgeBase, setKnowledgeBase] = useState<BotKnowledgeBase>(INITIAL_KNOWLEDGE_BASE);
   const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>(INITIAL_CUSTOM_FIELDS);
   const [broadcasts, setBroadcasts] = useState<BroadcastCampaign[]>(INITIAL_BROADCASTS);
@@ -117,9 +122,20 @@ function MainApp() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
 
-  // Sync with MongoDB Service on Mount
+  // Sync with MongoDB Service on Mount / Auth state change
   useEffect(() => {
     async function initDbSync() {
+      // Demo / Guest users keep demonstration data in memory without touching real DB
+      if (!isAuthenticated || user?.email === 'demo@manyflow.com' || user?.isDemo) {
+        setFlows(DEMO_FLOWS);
+        setSelectedFlowId(DEMO_FLOWS[0]?.id || '');
+        setTriggers(DEMO_TRIGGERS);
+        setContacts(DEMO_CONTACTS);
+        setConversations(DEMO_CONVERSATIONS);
+        return;
+      }
+
+      // Authenticated real user: fetch strictly real data from database
       try {
         const [remoteFlows, remoteContacts] = await Promise.all([
           dbService.getFlows(),
@@ -132,15 +148,14 @@ function MainApp() {
             setSelectedFlowId(remoteFlows[0]?.id || '');
           }
         } else {
-          // Seed initial flows to MongoDB
-          dbService.saveFlowsBulk(INITIAL_FLOWS).catch(() => {});
+          setFlows([]);
+          setSelectedFlowId('');
         }
 
         if (remoteContacts && remoteContacts.length > 0) {
           setContacts(remoteContacts);
         } else {
-          // Seed initial contacts to MongoDB
-          dbService.saveContactsBatch(INITIAL_CONTACTS).catch(() => {});
+          setContacts([]);
         }
       } catch (err) {
         console.warn('[App] MongoDB initialization check:', err);
@@ -148,7 +163,7 @@ function MainApp() {
     }
 
     initDbSync();
-  }, []);
+  }, [isAuthenticated, user?.email, user?.isDemo]);
 
   // If user explicitly requests full login screen
   if (isLoginModalOpen) {

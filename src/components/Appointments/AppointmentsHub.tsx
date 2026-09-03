@@ -39,9 +39,11 @@ import {
 } from '../../types';
 import { 
   INITIAL_APPOINTMENTS, 
+  DEMO_APPOINTMENTS,
   INITIAL_CHANNEL_BOOKING_CONFIGS, 
   INITIAL_APPOINTMENT_SERVICES 
 } from '../../data/initialData';
+import { useAuth } from '../../context/AuthContext';
 
 interface AppointmentsHubProps {
   onOpenSimulator?: (flowId?: string) => void;
@@ -52,8 +54,11 @@ export const AppointmentsHub: React.FC<AppointmentsHubProps> = ({
   onOpenSimulator,
   onNavigateToFlows
 }) => {
+  const { user } = useAuth();
+  const isDemo = !user || user.email === 'demo@manyflow.com' || Boolean(user.isDemo);
+
   const [activeTab, setActiveTab] = useState<'appointments' | 'calendar' | 'channel_configs' | 'services'>('appointments');
-  const [appointments, setAppointments] = useState<Appointment[]>(INITIAL_APPOINTMENTS);
+  const [appointments, setAppointments] = useState<Appointment[]>(() => isDemo ? DEMO_APPOINTMENTS : INITIAL_APPOINTMENTS);
   const [channelConfigs, setChannelConfigs] = useState<ChannelBookingConfig[]>(INITIAL_CHANNEL_BOOKING_CONFIGS);
   const [services, setServices] = useState<AppointmentService[]>(INITIAL_APPOINTMENT_SERVICES);
 

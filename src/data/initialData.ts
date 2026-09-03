@@ -1,7 +1,7 @@
 import { Flow, KeywordTrigger, PostCommentGrowthTool, Contact, LiveConversation, BotKnowledgeBase, MetaConnectionConfig, CustomFieldDefinition, BroadcastCampaign, UtilityMessageTemplate, ConnectedMetaAccount, MetaPostItem, FacebookApp, Appointment, ChannelBookingConfig, AppointmentService } from '../types';
 import { FLOW_TEMPLATES } from './flowTemplates';
 
-export const INITIAL_FLOWS: Flow[] = [
+export const DEMO_FLOWS: Flow[] = [
   ...FLOW_TEMPLATES.map(t => ({
     ...t.flow,
     stats: { runs: 0, completed: 0, ctr: 0 }
@@ -360,7 +360,10 @@ export const INITIAL_FLOWS: Flow[] = [
   }
 ];
 
-export const INITIAL_TRIGGERS: KeywordTrigger[] = [
+// Clean initial flows for authenticated real users (empty so user can build or import flows)
+export const INITIAL_FLOWS: Flow[] = [];
+
+export const DEMO_TRIGGERS: KeywordTrigger[] = [
   {
     id: "trig_appointment_omnichannel",
     name: "📅 Agendamento de Horário & Reunião em Todos os Canais",
@@ -461,6 +464,9 @@ export const INITIAL_TRIGGERS: KeywordTrigger[] = [
   }
 ];
 
+// Clean initial triggers for authenticated real users (empty)
+export const INITIAL_TRIGGERS: KeywordTrigger[] = [];
+
 export const INITIAL_CONNECTED_ACCOUNTS: ConnectedMetaAccount[] = [];
 
 export const INITIAL_META_POSTS: MetaPostItem[] = [];
@@ -469,7 +475,87 @@ export const INITIAL_COMMENT_TOOLS: PostCommentGrowthTool[] = [];
 
 export const INITIAL_CONTACTS: Contact[] = [];
 
+export const DEMO_CONTACTS: Contact[] = [
+  {
+    id: "demo_c_1",
+    name: "Camila Silveira",
+    username: "camilasilveira.style",
+    channel: "instagram",
+    avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+    email: "camila@moda.com.br",
+    phone: "+55 (11) 98765-1001",
+    tags: ["Lead-VIP", "Moda-Feminina", "Agendamento-Demo"],
+    customFields: { status_agendamento: "Confirmado" },
+    status: "active",
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    lastInteractionAt: "Há 15 min",
+    totalInteractions: 8
+  },
+  {
+    id: "demo_c_2",
+    name: "Rodrigo Fernandes",
+    username: "rodrigo.fernandes",
+    channel: "messenger",
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+    email: "rodrigo@agenciax.com",
+    phone: "+55 (21) 99887-2002",
+    tags: ["Agência", "Interesse-Whitelabel"],
+    customFields: {},
+    status: "active",
+    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+    lastInteractionAt: "Há 1 hora",
+    totalInteractions: 12
+  }
+];
+
 export const INITIAL_CONVERSATIONS: LiveConversation[] = [];
+
+export const DEMO_CONVERSATIONS: LiveConversation[] = [
+  {
+    id: "demo_conv_1",
+    contactId: "demo_c_1",
+    contact: {
+      id: "demo_c_1",
+      name: "Camila Silveira",
+      username: "camilasilveira.style",
+      channel: "instagram",
+      avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80",
+      email: "camila@moda.com.br",
+      phone: "+55 (11) 98765-1001",
+      tags: ["Lead-VIP", "Moda-Feminina", "Agendamento-Demo"],
+      customFields: { status_agendamento: "Confirmado" },
+      status: "active",
+      createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+      lastInteractionAt: "Há 15 min",
+      totalInteractions: 8
+    },
+    channel: "instagram",
+    status: "open",
+    unreadCount: 0,
+    isBotActive: true,
+    lastMessage: {
+      text: "Olá Camila! Que excelente notícia. Qual o melhor horário para você?",
+      timestamp: "14:10",
+      sender: "bot"
+    },
+    messages: [
+      {
+        id: "m_1",
+        sender: "user",
+        channel: "instagram",
+        text: "Olá! Gostaria de agendar uma demonstração.",
+        timestamp: "14:10"
+      },
+      {
+        id: "m_2",
+        sender: "bot",
+        channel: "instagram",
+        text: "Olá Camila! Que excelente notícia. Qual o melhor horário para você?",
+        timestamp: "14:10"
+      }
+    ]
+  }
+];
 
 export const INITIAL_KNOWLEDGE_BASE: BotKnowledgeBase = {
   companyName: "Minha Empresa",
@@ -942,70 +1028,65 @@ export const INITIAL_CHANNEL_BOOKING_CONFIGS: ChannelBookingConfig[] = [
   {
     channel: 'instagram',
     channelName: 'Instagram Direct',
-    channelHandleOrNumber: '@manyflow.oficial',
-    enabled: true,
+    channelHandleOrNumber: '',
+    enabled: false,
     autoConfirm: true,
     triggerKeywords: ['AGENDAR', 'AGENDAMENTO', 'MARCAR HORÁRIO', 'CONSULTA', 'REUNIÃO', 'DEMO'],
     welcomeButtonEnabled: true,
-    defaultFlowId: 'flow_appointment_booking',
+    defaultFlowId: '',
     calendarSyncEnabled: true,
-    notifyStaffWhatsapp: '+55 (11) 98765-4321',
-    totalBookings: 142,
-    lastBookingAt: 'Hoje às 14:15'
+    notifyStaffWhatsapp: '',
+    totalBookings: 0
   },
   {
     channel: 'whatsapp',
     channelName: 'WhatsApp Oficial & Híbrido',
-    channelHandleOrNumber: '+55 (11) 98765-4321',
-    enabled: true,
+    channelHandleOrNumber: '',
+    enabled: false,
     autoConfirm: true,
     triggerKeywords: ['AGENDAR', 'MARCAR', 'HORÁRIOS', 'RESERVA', 'CONSULTORIA', 'AGENDA'],
     welcomeButtonEnabled: true,
-    defaultFlowId: 'flow_appointment_booking',
+    defaultFlowId: '',
     calendarSyncEnabled: true,
-    notifyStaffWhatsapp: '+55 (11) 98765-4321',
-    totalBookings: 289,
-    lastBookingAt: 'Hoje às 14:38'
+    notifyStaffWhatsapp: '',
+    totalBookings: 0
   },
   {
     channel: 'messenger',
     channelName: 'Facebook Messenger',
-    channelHandleOrNumber: 'ManyFlow Soluções Digitais',
-    enabled: true,
+    channelHandleOrNumber: '',
+    enabled: false,
     autoConfirm: true,
     triggerKeywords: ['AGENDAR', 'DEMONSTRAÇÃO', 'CONSULTA', 'REUNIÃO', 'SCHEDULE'],
     welcomeButtonEnabled: true,
-    defaultFlowId: 'flow_appointment_booking',
+    defaultFlowId: '',
     calendarSyncEnabled: true,
-    notifyStaffWhatsapp: '+55 (11) 98765-4321',
-    totalBookings: 86,
-    lastBookingAt: 'Ontem às 18:20'
+    notifyStaffWhatsapp: '',
+    totalBookings: 0
   },
   {
     channel: 'telegram',
     channelName: 'Telegram Bot',
-    channelHandleOrNumber: '@ManyFlowOfficialBot',
-    enabled: true,
+    channelHandleOrNumber: '',
+    enabled: false,
     autoConfirm: true,
     triggerKeywords: ['/agendar', 'AGENDAR', 'CONSULTA', 'MARCAR HORÁRIO'],
     welcomeButtonEnabled: true,
-    defaultFlowId: 'flow_appointment_booking',
+    defaultFlowId: '',
     calendarSyncEnabled: true,
-    totalBookings: 34,
-    lastBookingAt: 'Ontem às 11:45'
+    totalBookings: 0
   },
   {
     channel: 'omnichannel',
     channelName: 'Live Chat & Webchat',
     channelHandleOrNumber: 'Widget Incorporado',
-    enabled: true,
+    enabled: false,
     autoConfirm: true,
     triggerKeywords: ['AGENDAR', 'AGENDAMENTO', 'MARCAR', 'CONSULTA', 'BOOKING'],
     welcomeButtonEnabled: true,
-    defaultFlowId: 'flow_appointment_booking',
+    defaultFlowId: '',
     calendarSyncEnabled: true,
-    totalBookings: 118,
-    lastBookingAt: 'Hoje às 13:05'
+    totalBookings: 0
   }
 ];
 
@@ -1039,7 +1120,11 @@ export const INITIAL_APPOINTMENT_SERVICES: AppointmentService[] = [
   }
 ];
 
-export const INITIAL_APPOINTMENTS: Appointment[] = [
+// Clean initial appointments for real accounts (empty)
+export const INITIAL_APPOINTMENTS: Appointment[] = [];
+
+// Demo appointments for demonstration / unauthenticated guest mode
+export const DEMO_APPOINTMENTS: Appointment[] = [
   {
     id: 'apt_101',
     contactId: 'c_1',
