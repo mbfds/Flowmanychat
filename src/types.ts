@@ -1,6 +1,21 @@
 export type ChannelType = 'instagram' | 'messenger' | 'whatsapp' | 'telegram' | 'omnichannel';
 
-export type NavigationTab = 'flows' | 'triggers' | 'comment_tools' | 'broadcast' | 'inbox' | 'contacts' | 'analytics' | 'whatsapp_groups' | 'settings' | 'ab_testing';
+export type NavigationTab = 
+  | 'flows' 
+  | 'triggers' 
+  | 'comment_tools' 
+  | 'broadcast' 
+  | 'inbox' 
+  | 'contacts' 
+  | 'appointments' 
+  | 'analytics' 
+  | 'whatsapp_groups' 
+  | 'affiliates' 
+  | 'settings' 
+  | 'ab_testing'
+  | 'admin_users'
+  | 'admin_subscriptions'
+  | 'admin_packages';
 
 export type NodeType = 'trigger' | 'message' | 'condition' | 'action' | 'ai_step' | 'delay' | 'ab_split';
 
@@ -287,6 +302,20 @@ export interface LeadScoreBreakdown {
   items: LeadScoreItem[];
 }
 
+export type CustomFieldValidationType =
+  | 'none'
+  | 'email'
+  | 'phone_br'
+  | 'phone_e164'
+  | 'cpf'
+  | 'cnpj'
+  | 'cep'
+  | 'url'
+  | 'date_iso'
+  | 'currency'
+  | 'number_only'
+  | 'custom_regex';
+
 export interface CustomFieldDefinition {
   id: string;
   name: string;
@@ -295,6 +324,16 @@ export interface CustomFieldDefinition {
   description?: string;
   options?: string[];
   defaultValue?: string;
+  // Validation fields (Regex for emails, phones, documents, etc.)
+  validationType?: CustomFieldValidationType;
+  regexPattern?: string;
+  regexFlags?: string;
+  validationErrorMessage?: string;
+  isRequired?: boolean;
+  // External CRM Integration fields
+  crmTargetField?: string;
+  crmPlatformPreset?: 'generic' | 'rd_station' | 'hubspot' | 'active_campaign' | 'salesforce' | 'pipedrive';
+  normalizationRule?: 'none' | 'lowercase' | 'uppercase' | 'digits_only' | 'trim';
   createdAt: string;
 }
 
@@ -619,12 +658,63 @@ export interface WebhookDeliveryLog {
   retryCount?: number;
 }
 
+export type ConversionEventType =
+  | 'lead_generated'
+  | 'sale_completed'
+  | 'appointment_booked'
+  | 'tag_added'
+  | 'flow_completed'
+  | 'cart_abandoned'
+  | 'pix_paid'
+  | 'contact_qualified';
+
+export interface ConversionWebhookEndpoint {
+  id: string;
+  name: string;
+  url: string;
+  events: ConversionEventType[];
+  isActive: boolean;
+  direction?: 'outbound' | 'inbound';
+  targetPlatform?: 'custom_webhook' | 'rd_station' | 'hubspot' | 'active_campaign' | 'zapier' | 'n8n' | 'make' | 'hotmart' | 'kiwify';
+  secretToken?: string;
+  headers?: { key: string; value: string }[];
+  includeCustomFields?: boolean;
+  includeContactData?: boolean;
+  retryOnFailure?: boolean;
+  maxRetries?: number; // e.g. 3 to 10
+  retryIntervalSeconds?: number; // e.g. 15, 30, 60 seconds
+  backoffStrategy?: 'exponential' | 'fixed' | 'linear';
+  timeoutSeconds?: number; // e.g. 5, 10, 30 seconds
+  retryableStatusCodes?: number[];
+  description?: string;
+  lastDeliveryStatus?: 'success' | 'failed' | 'idle';
+  lastDeliveryAt?: string;
+  lastStatusCode?: number;
+  totalDeliveries: number;
+  totalErrors: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface WebhookSettingsState {
   endpoints: WebhookEndpointConfig[];
+  conversionEndpoints?: ConversionWebhookEndpoint[];
   globalVerifyToken: string;
   appSecret: string;
   serverBaseUrl: string;
   enableLogging: boolean;
+  
+  // Resilient Delivery & Retry Policies
+  autoRetryFailed?: boolean;
+  maxRetryAttempts?: number;
+  retryIntervalSeconds?: number;
+  retryBackoffStrategy?: 'exponential' | 'fixed' | 'linear';
+  retryTimeoutSeconds?: number;
+  retryableStatusCodes?: number[];
+  deadLetterQueueEnabled?: boolean;
+  jitterEnabled?: boolean;
+  verificationStatus?: 'verified' | 'pending';
+  activeFields?: string[];
 }
 
 export type WebhookRoutedType = 
@@ -823,6 +913,24 @@ export interface User {
   lastLoginAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Package, expiration & subscription administration
+  plan?: string;
+  planName?: string;
+  billingCycle?: 'monthly' | 'quarterly' | 'semiannual' | 'yearly' | 'lifetime';
+  expiresAt?: string; // Expiration / renewal date (ISO string: YYYY-MM-DD)
+  dueDate?: string;
+  blockOnExpire?: boolean;
+  phone?: string;
+  notes?: string;
+  isDemo?: boolean;
+  customLimits?: {
+    maxFlows?: number;
+    maxContacts?: number;
+    maxUsers?: number;
+    maxAiMessages?: number;
+    enableWebhooks?: boolean;
+    enableApi?: boolean;
+  };
 }
 
 export interface TenantBranding {
@@ -845,6 +953,10 @@ export interface TenantDomain {
   verificationToken: string; // TXT record for domain validation
   targetHost: string; // e.g. "127.0.0.1:3000" or server IP
   cnameRecord: string; // e.g. "app.manyflow.com" or server domain
+  cnameHost?: string; // e.g. "app" or "chat"
+  cnameTarget?: string; // e.g. "cname.manyflow.io"
+  sslIssuedAt?: string;
+  nginxConfigSnippet?: string;
   createdAt: string;
   lastCheckedAt?: string;
 }
@@ -859,7 +971,8 @@ export interface Tenant {
   maxUsers: number;
   maxFlows: number;
   maxContacts: number;
-  plan: 'starter' | 'pro' | 'enterprise' | 'whitelabel';
+  plan: 'starter' | 'pro' | 'enterprise' | 'whitelabel' | string;
+  planId?: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -870,6 +983,232 @@ export interface AuthSession {
   tenant: Tenant;
   token: string;
   expiresAt: string;
+}
+
+// ============================================================================
+// --- SUBSCRIPTION PLANS & BILLING PACKAGES TYPES (ADMIN CRUD) ---
+// ============================================================================
+
+export interface PlanLimits {
+  maxContacts: number;
+  maxFlows: number;
+  maxUsers: number;
+  maxCustomDomains: number;
+  maxMonthlyMessages: number;
+  includeAI: boolean;
+  includeWhiteLabel: boolean;
+  includeLiveChat: boolean;
+  includeApiAccess: boolean;
+  includeWhatsAppBulk: boolean;
+}
+
+export interface SubscriptionPlan {
+  id: string; // e.g. "plan_starter", "plan_pro", "plan_whitelabel"
+  name: string; // e.g. "Iniciante", "Profissional", "White-Label Agência"
+  slug: string;
+  description: string;
+  priceMonthly: number; // e.g. 97, 197, 497
+  priceYearly: number; // e.g. 970, 1970, 4970 (discounted)
+  currency: string; // 'BRL' | 'USD'
+  billingInterval: 'monthly' | 'yearly';
+  badge?: string; // e.g. "Mais Vendido", "Melhor Valor", "Exclusivo Revenda"
+  isHighlighted: boolean;
+  isActive: boolean;
+  limits: PlanLimits;
+  features: string[]; // List of promotional bullet items
+  commissionRate: number; // Affiliate commission % (e.g. 30 for 30%)
+  isRecurrentCommission: boolean; // Pays every month the client stays active
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SubscriptionPaymentStatus = 'paid' | 'pending' | 'overdue' | 'cancelled';
+export type SubscriptionPaymentMethod = 'pix' | 'credit_card' | 'bank_slip';
+
+export interface CustomerSubscription {
+  id: string; // e.g. "sub_10928"
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone?: string;
+  tenantId: string;
+  tenantName: string;
+  planId: string;
+  planName: string;
+  amount: number; // R$ valor da mensalidade
+  currency: string; // 'BRL'
+  billingCycle: 'monthly' | 'yearly';
+  status: SubscriptionPaymentStatus;
+  paymentMethod: SubscriptionPaymentMethod;
+  dueDate: string; // YYYY-MM-DD
+  paidAt?: string;
+  nextBillingDate: string; // YYYY-MM-DD
+  pixCopyPasteCode?: string;
+  invoicePdfUrl?: string;
+  notes?: string;
+  remindersSent: number;
+  lastReminderAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AddonCategory = 'messages' | 'contacts' | 'domains' | 'ai_agents' | 'team_seats' | 'custom';
+
+export interface AddonPackage {
+  id: string; // e.g. "pkg_msg_50k"
+  name: string; // e.g. "Pacote +50.000 Mensagens WhatsApp & Direct"
+  slug: string;
+  category: AddonCategory;
+  description: string;
+  price: number; // R$
+  billingType: 'recurring_monthly' | 'one_time';
+  unitAmount: number; // e.g. 50000
+  unitLabel: string; // e.g. "+50.000 disparos/mês"
+  badge?: string; // e.g. "Mais Vendido"
+  isActive: boolean;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// --- AFFILIATE & RESELLER / WHITE-LABEL SYSTEM TYPES ---
+// ============================================================================
+
+export type AffiliateStatus = 'active' | 'pending_approval' | 'suspended';
+export type AffiliatePayoutMethod = 'pix' | 'bank_transfer' | 'paypal' | 'stripe';
+export type AffiliateSaleStatus = 'pending' | 'approved' | 'paid' | 'refunded';
+export type PayoutRequestStatus = 'pending' | 'processing' | 'completed' | 'rejected';
+
+export interface AffiliateAccount {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  tenantId: string;
+  affiliateCode: string; // Unique referral code, e.g. "MARCOS30"
+  affiliateLink: string; // Full URL e.g. "https://app.manyflow.io/?ref=MARCOS30"
+  customSubdomain?: string; // e.g. "marcos.manyflow.io" or custom white-label link
+  commissionRate: number; // Commission percentage, e.g. 30%
+  isRecurrent: boolean; // Monthly recurring commission
+  status: AffiliateStatus;
+  
+  // Payout info
+  payoutMethod: AffiliatePayoutMethod;
+  payoutKey: string; // e.g. Pix key or IBAN
+  payoutHolderName: string;
+  payoutTaxId?: string; // CPF / CNPJ
+  
+  // Financial metrics
+  totalEarnings: number; // R$ total generated
+  pendingBalance: number; // R$ awaiting payment
+  paidBalance: number; // R$ already transferred
+  availableForWithdrawal: number; // R$ eligible for withdrawal
+  
+  // Conversion metrics
+  totalClicks: number;
+  totalLeads: number;
+  totalPaidClients: number;
+  conversionRatePercent: number;
+  
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AffiliateSale {
+  id: string;
+  affiliateId: string;
+  affiliateCode: string;
+  customerName: string;
+  customerEmail: string;
+  customerTenantId?: string;
+  planId: string;
+  planName: string;
+  saleAmount: number; // R$
+  commissionAmount: number; // R$
+  commissionRate: number; // %
+  billingCycle: 'monthly' | 'yearly';
+  status: AffiliateSaleStatus;
+  isRecurrentMonth: number; // 1 = 1st month, 2 = 2nd month...
+  createdAt: string;
+  paidAt?: string;
+}
+
+export interface AffiliatePayoutRequest {
+  id: string;
+  affiliateId: string;
+  affiliateCode: string;
+  affiliateName: string;
+  amount: number; // R$
+  payoutMethod: AffiliatePayoutMethod;
+  payoutKey: string;
+  payoutHolderName: string;
+  payoutTaxId?: string;
+  status: PayoutRequestStatus;
+  requestedAt: string;
+  processedAt?: string;
+  transactionReceipt?: string;
+  adminNotes?: string;
+}
+
+export interface AffiliateReferralLink {
+  id: string;
+  affiliateId: string;
+  title: string;
+  slug: string;
+  fullUrl: string;
+  destinationPage: 'home' | 'plans' | 'checkout' | 'whatsapp_direct';
+  customCoupon?: string;
+  discountPercent?: number;
+  utmSource?: string;
+  utmMedium?: string;
+  utmCampaign?: string;
+  clicks: number;
+  leads: number;
+  conversions: number;
+  totalEarned: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AffiliateCommissionRule {
+  id: string;
+  planId: string;
+  planName: string;
+  defaultCommissionRate: number; // e.g. 30%
+  customRateForUser?: number;
+  isRecurrent: boolean; // Monthly recurring
+  minSalesForBonus?: number;
+  bonusAmount?: number;
+}
+
+export interface DnsCheckNode {
+  location: string;
+  countryCode: string;
+  dnsServer: string;
+  status: 'passed' | 'warning' | 'failed';
+  resolvedIpOrCname: string;
+  latencyMs: number;
+  ttlSeconds: number;
+}
+
+export interface DnsValidationReport {
+  domain: string;
+  expectedCname: string;
+  status: 'fully_propagated' | 'partially_propagated' | 'not_found' | 'error';
+  cnameRecordVerified: boolean;
+  aRecordFallback: string;
+  sslCertificateActive: boolean;
+  sslIssuer?: string;
+  sslExpiresInDays?: number;
+  httpPort3000Reachable: boolean;
+  proxyCloudflareDetected: boolean;
+  nodesChecked: DnsCheckNode[];
+  nginxSnippet: string;
+  caddySnippet: string;
+  instructions: string[];
+  testedAt: string;
 }
 
 // ============================================================================
@@ -1650,16 +1989,66 @@ export interface WebhookDeadLetterItem {
   event: ExternalMessageEventType;
   channel: ChannelType;
   totalAttempts: number;
-  lastStatusCode: number;
-  lastErrorMessage: string;
+  lastStatusCode?: number;
+  lastErrorMessage?: string;
   payload: any;
   headers: Record<string, string>;
   retryHistory: WebhookRetryAttemptLog[];
   failedAt: string;
   status: 'queued' | 'reprocessed' | 'discarded';
-  tenantId: string;
   reprocessedAt?: string;
+  tenantId: string;
 }
+
+export type AppointmentStatus = 'confirmed' | 'pending' | 'completed' | 'rescheduled' | 'cancelled';
+
+export interface Appointment {
+  id: string;
+  contactId: string;
+  contactName: string;
+  contactHandle?: string; // @username, phone or email
+  contactPhone?: string;
+  contactEmail?: string;
+  channel: ChannelType;
+  serviceTitle: string;
+  serviceDurationMinutes: number;
+  scheduledDate: string; // YYYY-MM-DD
+  scheduledTime: string; // HH:mm
+  status: AppointmentStatus;
+  notes?: string;
+  googleCalendarEventId?: string;
+  meetingLink?: string;
+  createdAt: string;
+  updatedAt: string;
+  reminderSent24h?: boolean;
+  reminderSent2h?: boolean;
+}
+
+export interface ChannelBookingConfig {
+  channel: ChannelType;
+  channelName: string;
+  channelHandleOrNumber: string;
+  enabled: boolean;
+  autoConfirm: boolean;
+  triggerKeywords: string[];
+  welcomeButtonEnabled: boolean;
+  defaultFlowId: string;
+  calendarSyncEnabled: boolean;
+  notifyStaffWhatsapp?: string;
+  totalBookings: number;
+  lastBookingAt?: string;
+}
+
+export interface AppointmentService {
+  id: string;
+  title: string;
+  description: string;
+  durationMinutes: number;
+  price?: string;
+  active: boolean;
+  color: string;
+}
+
 
 
 

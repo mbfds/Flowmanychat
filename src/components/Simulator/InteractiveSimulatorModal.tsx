@@ -23,7 +23,8 @@ import {
   Smile,
   Split,
   Trophy,
-  Globe
+  Globe,
+  Calendar
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Flow, FlowNode, FlowButton, QuickReply, ChatMessage, Contact, BotKnowledgeBase, CustomFieldDefinition } from '../../types';
@@ -101,6 +102,7 @@ export const InteractiveSimulatorModal: React.FC<InteractiveSimulatorModalProps>
           : '👋 Olá! Este é o atendimento oficial no Facebook Messenger. Como posso te ajudar hoje?',
         timestamp: 'Agora',
         quickReplies: [
+          { id: 'qr_agendar', text: '📅 Agendar Horário' },
           { id: 'qr_quero', text: '🎁 Quero o Cupom' },
           { id: 'qr_preco', text: '💰 Ver Preços' },
           { id: 'qr_humano', text: '👨‍💼 Falar com Humano' }
@@ -484,8 +486,25 @@ export const InteractiveSimulatorModal: React.FC<InteractiveSimulatorModalProps>
   };
 
   // Preset Simulation Scenarios
-  const triggerScenario = (scenario: 'comment_all_posts' | 'comment_specific' | 'comment_quero' | 'story_mention' | 'keyword_preco' | 'handover' | 'ab_welcome') => {
+  const triggerScenario = (scenario: 'comment_all_posts' | 'comment_specific' | 'comment_quero' | 'story_mention' | 'keyword_preco' | 'handover' | 'ab_welcome' | 'appointment_booking') => {
     switch (scenario) {
+      case 'appointment_booking':
+        addLog('trigger', `📅 Simulando solicitação de Agendamento Omnichannel: "AGENDAR"`);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `msg_sim_booking_${Date.now()}`,
+            sender: 'user',
+            channel,
+            text: '📅 Olá! Gostaria de agendar um horário com vocês.',
+            timestamp: 'Agora'
+          }
+        ]);
+        setTimeout(() => {
+          handleSendMessage('AGENDAR');
+        }, 400);
+        break;
+
       case 'ab_welcome':
         addLog('trigger', `Simulando início de conversa para Teste A/B de Boas-Vindas ("OLÁ")`);
         handleSendMessage('OLÁ');
@@ -748,6 +767,16 @@ export const InteractiveSimulatorModal: React.FC<InteractiveSimulatorModalProps>
                   <span>🧪 Testar A/B Boas-Vindas ("OLÁ")</span>
                 </div>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-fuchsia-200 text-fuchsia-800 font-bold">Split</span>
+              </button>
+              <button
+                onClick={() => triggerScenario('appointment_booking')}
+                className="col-span-2 p-2 rounded-lg bg-gradient-to-r from-blue-50 to-emerald-50 hover:from-blue-100 hover:to-emerald-100 border border-blue-200 text-left text-xs font-bold text-slate-900 flex items-center justify-between transition-colors cursor-pointer shadow-xs"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 shrink-0 text-blue-600" />
+                  <span>📅 Testar Agendamento de Horário ("AGENDAR")</span>
+                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">Omnichannel</span>
               </button>
               <button
                 onClick={() => triggerScenario('comment_all_posts')}

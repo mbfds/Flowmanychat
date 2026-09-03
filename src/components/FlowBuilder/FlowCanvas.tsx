@@ -11,6 +11,9 @@ import {
   Download, 
   Upload, 
   Check,
+  CheckCircle2,
+  AlertCircle,
+  X,
   Instagram,
   Facebook,
   Bot,
@@ -34,10 +37,14 @@ import { FlowNodeCard } from './FlowNodeCard';
 import { NodeInspectorDrawer } from './NodeInspectorDrawer';
 import { VoiceToFlowModal } from './VoiceToFlowModal';
 import { FlowPerformanceOverlay } from './FlowPerformanceOverlay';
+import { FlowExportModal } from './FlowExportModal';
+import { FlowImportModal } from './FlowImportModal';
+import { parseAndValidateFlowJson, FlowValidationResult } from '../../services/flowTemplateService';
 
 interface FlowCanvasProps {
   flow: Flow;
   onUpdateFlow: (updatedFlow: Flow) => void;
+  onImportFlow?: (importedFlow: Flow, asNewFlow?: boolean) => void;
   openSimulator: () => void;
   openAIGenerator: () => void;
   openTemplates?: () => void;
@@ -49,6 +56,7 @@ interface FlowCanvasProps {
 export const FlowCanvas: React.FC<FlowCanvasProps> = ({
   flow,
   onUpdateFlow,
+  onImportFlow,
   openSimulator,
   openAIGenerator,
   openTemplates,
@@ -71,7 +79,18 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [showPerformanceOverlay, setShowPerformanceOverlay] = useState(false);
+
+  // Export & Import states
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [pendingValidationResult, setPendingValidationResult] = useState<FlowValidationResult | null>(null);
+  const [isDraggingFileOver, setIsDraggingFileOver] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccessToast, setImportSuccessToast] = useState<{ title: string; nodeCount: number } | null>(null);
+
   const canvasRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounter = useRef(0);
 
   // Keyboard shortcut listener for ESC to exit Zen mode
   useEffect(() => {
@@ -216,19 +235,179 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
     setTimeout(() => setIsSaved(false), 2000);
   };
 
+  // Process uploaded or dropped JSON file
+  const processImportFile = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.json') && file.type !== 'application/json') {
+      setImportError(`O arquivo "${file.name}" não é um JSON (.json). Por favor selecione um arquivo de fluxo válido.`);
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const result = parseAndValidateFlowJson(text);
+      if (result.success && result.flow) {
+        setPendingValidationResult(result);
+        setIsImportModalOpen(true);
+        setImportError(null);
+      } else {
+        setImportError(result.error || 'Não foi possível validar a estrutura do fluxo no arquivo JSON.');
+      }
+    } catch (err: any) {
+      setImportError(`Erro ao ler arquivo: ${err?.message || 'Falha de leitura'}`);
+    }
+  };
+
+  // Drag and drop event handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDraggingFileOver(true);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      setIsDraggingFileOver(false);
+      dragCounter.current = 0;
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFileOver(false);
+    dragCounter.current = 0;
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await processImportFile(files[0]);
+    }
+  };
+
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      await processImportFile(files[0]);
+    }
+    if (e.target) e.target.value = '';
+  };
+
+  const handleConfirmImport = (importedFlow: Flow, asNewFlow: boolean) => {
+    if (onImportFlow) {
+      onImportFlow(importedFlow, asNewFlow);
+    } else {
+      onUpdateFlow(importedFlow);
+    }
+
+    setImportSuccessToast({
+      title: importedFlow.title,
+      nodeCount: importedFlow.nodes.length
+    });
+    setTimeout(() => {
+      setImportSuccessToast(null);
+    }, 4500);
+  };
+
   // Export flow as JSON
   const handleExportJSON = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(flow, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `${flow.title.toLowerCase().replace(/\s+/g, '_')}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+    setIsExportModalOpen(true);
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#F8F9FB] overflow-hidden relative select-none">
+    <div 
+      className="flex-1 flex flex-col h-full bg-[#F8F9FB] overflow-hidden relative select-none"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Hidden File Input for Manual JSON Import */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept=".json,application/json"
+        onChange={handleFileInputChange}
+        className="hidden"
+        id="input_flow_json_file"
+      />
+
+      {/* Drag and Drop Dropzone Overlay */}
+      {isDraggingFileOver && (
+        <div 
+          id="canvas_drag_drop_overlay"
+          className="absolute inset-0 z-50 bg-blue-950/70 backdrop-blur-xs flex items-center justify-center p-6 animate-in fade-in duration-150 pointer-events-none"
+        >
+          <div className="bg-white dark:bg-slate-900 border-3 border-dashed border-blue-500 rounded-3xl p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center gap-4 animate-in zoom-in-95 duration-150">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 animate-bounce">
+              <Upload className="w-8 h-8" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-black text-slate-900 dark:text-white">
+                Solte o Arquivo de Fluxo (.json) Aqui
+              </h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                O arquivo será validado instantaneamente para importação dos nós e conexões de automação.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[11px] font-bold text-blue-700 dark:text-blue-300">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span>Crie como Novo Fluxo ou Substitua o Atual</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Success Toast */}
+      {importSuccessToast && (
+        <div 
+          id="toast_import_success"
+          className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-900/95 text-white text-xs px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 border border-emerald-500/40 animate-in fade-in slide-in-from-top-4 duration-200"
+        >
+          <div className="p-1.5 rounded-xl bg-emerald-500 text-white shrink-0">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="font-bold">Modelo Importado com Sucesso!</p>
+            <p className="text-[11px] text-emerald-200">
+              "{importSuccessToast.title}" ({importSuccessToast.nodeCount} nós carregados)
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Import Error Toast */}
+      {importError && (
+        <div 
+          id="toast_import_error"
+          className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-rose-950/95 text-white text-xs px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 border border-rose-500/40 animate-in fade-in slide-in-from-top-4 duration-200 max-w-md"
+        >
+          <div className="p-1.5 rounded-xl bg-rose-500 text-white shrink-0">
+            <AlertCircle className="w-4 h-4" />
+          </div>
+          <div className="flex-1">
+            <p className="font-bold text-rose-200">Falha ao Importar Fluxo</p>
+            <p className="text-[11px] text-rose-100 leading-snug">{importError}</p>
+          </div>
+          <button 
+            onClick={() => setImportError(null)}
+            className="p-1 rounded-lg text-rose-300 hover:text-white cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Zen Mode Banner Toast */}
       {showZenToast && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 text-white text-xs px-4 py-2 rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2 animate-in fade-in slide-in-from-top-4 duration-200">
@@ -343,13 +522,26 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
               <span className="hidden sm:inline">IA Generator</span>
             </button>
 
-            {/* Export JSON */}
+            {/* Export Flow as JSON */}
             <button
+              id="btn_export_flow_json"
               onClick={handleExportJSON}
-              title="Exportar Fluxo (JSON)"
-              className="p-1.5 rounded-md bg-white hover:bg-gray-50 border border-[#E2E8F0] text-[#64748B] hover:text-[#1A1D21] transition-colors shadow-xs cursor-pointer"
+              title="Exportar Modelo de Automação (.json)"
+              className="py-1.5 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-[#E2E8F0] dark:border-slate-700 text-[#1A1D21] dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span className="hidden sm:inline">Exportar JSON</span>
+            </button>
+
+            {/* Import Flow from JSON */}
+            <button
+              id="btn_import_flow_json"
+              onClick={() => fileInputRef.current?.click()}
+              title="Importar Arquivo JSON de Fluxo (ou arraste e solte no canvas)"
+              className="py-1.5 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 border border-[#E2E8F0] dark:border-slate-700 text-[#1A1D21] dark:text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden sm:inline">Importar JSON</span>
             </button>
 
             {/* Save / Publish */}
@@ -389,6 +581,24 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
             title="Salvar alterações"
           >
             {isSaved ? <Check className="w-4 h-4 text-emerald-600" /> : <Save className="w-4 h-4" />}
+          </button>
+
+          <button
+            id="btn_zen_export_flow"
+            onClick={handleExportJSON}
+            className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+            title="Exportar fluxo (JSON)"
+          >
+            <Download className="w-4 h-4 text-blue-600" />
+          </button>
+
+          <button
+            id="btn_zen_import_flow"
+            onClick={() => fileInputRef.current?.click()}
+            className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+            title="Importar fluxo (JSON) ou arraste e solte"
+          >
+            <Upload className="w-4 h-4 text-emerald-600" />
           </button>
 
           <button
@@ -624,6 +834,25 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         currentFlow={flow}
         onAddNodesToFlow={handleAddVoiceNodes}
         onReplaceFlow={(newFlow) => onUpdateFlow(newFlow)}
+      />
+
+      {/* Export Flow Modal */}
+      <FlowExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        flow={flow}
+      />
+
+      {/* Import Flow Modal */}
+      <FlowImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => {
+          setIsImportModalOpen(false);
+          setPendingValidationResult(null);
+        }}
+        validationResult={pendingValidationResult}
+        currentFlowTitle={flow.title}
+        onConfirmImport={handleConfirmImport}
       />
     </div>
   );

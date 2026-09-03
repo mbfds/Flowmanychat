@@ -22,13 +22,24 @@ import {
 import { TenantDomain, Tenant, TenantBranding } from '../../types';
 import { tenantService } from '../../services/tenantService';
 import { useAuth } from '../../context/AuthContext';
+import { TechnicalDnsUtility } from './TechnicalDnsUtility';
 
-export const DomainManager: React.FC = () => {
+interface DomainManagerProps {
+  isTechnicalMode?: boolean;
+}
+
+export const DomainManager: React.FC<DomainManagerProps> = ({ isTechnicalMode = false }) => {
   const { tenant, tenants, refreshSession } = useAuth();
   const [domains, setDomains] = useState<TenantDomain[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [showTechDetails, setShowTechDetails] = useState(isTechnicalMode);
+  const [activeSubTab, setActiveSubTab] = useState<'domains' | 'dns_tester'>('domains');
+
+  useEffect(() => {
+    setShowTechDetails(isTechnicalMode);
+  }, [isTechnicalMode]);
 
   // New Domain Form Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -155,18 +166,46 @@ export const DomainManager: React.FC = () => {
           </div>
         </div>
 
-        <button
-          id="btn_open_add_domain_modal"
-          onClick={() => setIsAddModalOpen(true)}
-          className="py-2.5 px-4 rounded-xl bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Adicionar Domínio</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <button
+              onClick={() => setActiveSubTab('domains')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'domains'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Domínios Conectados
+            </button>
+            <button
+              onClick={() => setActiveSubTab('dns_tester')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeSubTab === 'dns_tester'
+                  ? 'bg-[#0084FF] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Validador de DNS & CNAME
+            </button>
+          </div>
+
+          <button
+            id="btn_open_add_domain_modal"
+            onClick={() => setIsAddModalOpen(true)}
+            className="py-2.5 px-4 rounded-xl bg-[#0084FF] hover:bg-[#0073E6] text-white text-xs font-bold shadow-xs transition-all flex items-center gap-2 cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Adicionar Domínio</span>
+          </button>
+        </div>
       </div>
 
-      {/* Grid: Domains Table & White-Label Customization */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      {activeSubTab === 'dns_tester' ? (
+        <TechnicalDnsUtility />
+      ) : (
+        /* Grid: Domains Table & White-Label Customization */
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Col (7 cols): Registered Domains */}
         <div className="lg:col-span-7 space-y-4">
           <div className="bg-white border border-[#E2E8F0] rounded-2xl p-5 shadow-xs space-y-4">
@@ -290,33 +329,106 @@ export const DomainManager: React.FC = () => {
               )}
             </div>
 
-            {/* DNS Instructions Box */}
+            {/* DNS & CNAME Instructions Box */}
             <div className="p-4 rounded-xl bg-slate-900 text-white space-y-3 shadow-sm">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold flex items-center gap-1.5 text-slate-200">
                   <HelpCircle className="w-3.5 h-3.5 text-blue-400" />
-                  Como apontar qualquer domínio para o seu servidor (aaPanel / Nginx)
+                  Instruções de Apontamento CNAME (White-Label)
                 </span>
-                <span className="text-[10px] font-mono bg-slate-800 px-2 py-0.5 rounded text-slate-300">
-                  Porta 3000
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowTechDetails(!showTechDetails)}
+                  className="text-[10px] font-mono bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-slate-300 transition-colors cursor-pointer border border-slate-700"
+                >
+                  {showTechDetails ? 'Ocultar Modo Técnico' : 'Mostrar Modo Técnico'}
+                </button>
               </div>
 
-              <div className="space-y-2 text-xs text-slate-300">
-                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 flex items-center justify-between">
+              {/* Minimalist CNAME summary for standard mode */}
+              <div className="p-3 rounded-lg bg-slate-800/80 border border-slate-700 space-y-2">
+                <div className="flex items-center justify-between text-xs">
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">Opção 1: Entrada tipo A (Direto no IP do Servidor)</span>
-                    <span className="font-mono text-emerald-400">@ ou app.seudominio.com ➔ [IP_DO_SEU_SERVIDOR_AAPANEL]</span>
+                    <span className="text-[10px] text-slate-400 block font-bold">Tipo de Registro DNS:</span>
+                    <span className="font-mono text-emerald-400 font-bold">CNAME</span>
                   </div>
-                </div>
-
-                <div className="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">Opção 2: Entrada CNAME</span>
-                    <span className="font-mono text-sky-400">chat.cliente.com.br ➔ app.manyflow.com (ou domínio principal)</span>
+                    <span className="text-[10px] text-slate-400 block font-bold">Nome / Subdomínio (Host):</span>
+                    <span className="font-mono text-sky-300 font-bold">app <span className="text-slate-400 font-normal">ou</span> @</span>
                   </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-bold">Destino / Valor (Target):</span>
+                    <span className="font-mono text-indigo-300 font-bold">cname.manyflow.io</span>
+                  </div>
+                  <button
+                    onClick={() => handleCopy('cname.manyflow.io', 'cname_target')}
+                    className="p-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedKey === 'cname_target' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedKey === 'cname_target' ? 'Copiado' : 'Copiar'}</span>
+                  </button>
                 </div>
               </div>
+
+              {/* Advanced Technical Details Section */}
+              {showTechDetails && (
+                <div className="pt-2 border-t border-slate-800 space-y-3 animate-in fade-in duration-200">
+                  <div className="flex items-center justify-between text-[11px] text-amber-400 font-semibold">
+                    <span className="flex items-center gap-1">
+                      <Server className="w-3.5 h-3.5" />
+                      Configuração de Proxy Reverso Nginx (aaPanel / VPS)
+                    </span>
+                    <button
+                      onClick={() => handleCopy(`server {
+    listen 80;
+    listen 443 ssl http2;
+    server_name app.seudominio.com;
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`, 'nginx_code')}
+                      className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-[10px] flex items-center gap-1 border border-amber-500/30"
+                    >
+                      {copiedKey === 'nginx_code' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                      <span>Copiar Bloco Nginx</span>
+                    </button>
+                  </div>
+
+                  <pre className="p-3 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[10px] text-slate-300 overflow-x-auto leading-relaxed">
+{`server {
+    listen 80;
+    listen 443 ssl http2;
+    server_name app.seudominio.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`}
+                  </pre>
+
+                  <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-400">
+                    <div className="p-2 rounded bg-slate-800/60 border border-slate-700">
+                      <span className="font-bold text-slate-300 block">Isolamento Multi-Tenant:</span>
+                      O backend lê o cabeçalho <code className="text-sky-400 font-mono">Host: $host</code> e carrega a marca e contatos do cliente correspondente.
+                    </div>
+                    <div className="p-2 rounded bg-slate-800/60 border border-slate-700">
+                      <span className="font-bold text-slate-300 block">Certificado SSL Automático:</span>
+                      Emita Let's Encrypt gratuito no aaPanel para cada subdomínio adicionado com renovação automática a cada 90 dias.
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -423,6 +535,7 @@ export const DomainManager: React.FC = () => {
           </div>
         </div>
       </div>
+      )}
 
       {/* Add Domain Modal */}
       {isAddModalOpen && (

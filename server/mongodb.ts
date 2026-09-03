@@ -134,6 +134,15 @@ export async function getDb(): Promise<Db | null> {
         dbInstance.collection("tenants").createIndex({ slug: 1 }, { unique: true }),
         dbInstance.collection("domains").createIndex({ domain: 1 }, { unique: true }),
         dbInstance.collection("domains").createIndex({ tenantId: 1 }),
+        dbInstance.collection("plans").createIndex({ id: 1 }, { unique: true }),
+        dbInstance.collection("plans").createIndex({ slug: 1 }),
+        dbInstance.collection("affiliates").createIndex({ id: 1 }, { unique: true }),
+        dbInstance.collection("affiliates").createIndex({ userId: 1 }, { unique: true }),
+        dbInstance.collection("affiliates").createIndex({ affiliateCode: 1 }, { unique: true }),
+        dbInstance.collection("affiliate_sales").createIndex({ id: 1 }, { unique: true }),
+        dbInstance.collection("affiliate_sales").createIndex({ affiliateId: 1 }),
+        dbInstance.collection("affiliate_payouts").createIndex({ id: 1 }, { unique: true }),
+        dbInstance.collection("affiliate_payouts").createIndex({ affiliateId: 1 }),
       ]);
     } catch (idxErr: any) {
       // Check if error is case conflict on collection creation and resolve

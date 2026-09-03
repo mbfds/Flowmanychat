@@ -273,6 +273,8 @@ export const webhookService = {
     endpointUrl: string;
     eventType: string;
     channel: string;
+    customPayload?: any;
+    customHeaders?: Record<string, string>;
   }): Promise<{ success: boolean; statusCode: number; durationMs: number; responseBody: string; log: WebhookDeliveryLog }> {
     const response = await fetch('/api/webhooks/test-dispatch', {
       method: 'POST',

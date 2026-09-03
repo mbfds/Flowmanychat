@@ -61,8 +61,18 @@ export const Header: React.FC<HeaderProps> = ({
         return 'Relatórios & Métricas de Conversão';
       case 'ab_testing':
         return 'Testes A/B: Comparador Side-by-Side de Fluxos';
+      case 'appointments':
+        return 'Agendamentos & Calendário nos Canais';
       case 'whatsapp_groups':
         return 'Super Administrador & Monetização de Grupos WhatsApp';
+      case 'affiliates':
+        return 'Sistema & Gestão de Afiliados ManyFlow';
+      case 'admin_users':
+        return 'Gestão de Usuários & Contas (Admin SaaS)';
+      case 'admin_subscriptions':
+        return 'Gestão de Mensalidades, PIX & Faturas Recorrentes';
+      case 'admin_packages':
+        return 'Gestão de Planos, Limites & Pacotes Adicionais';
       case 'settings':
         return 'Configurações de Conexão & Base IA';
       default:

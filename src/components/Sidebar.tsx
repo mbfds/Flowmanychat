@@ -23,7 +23,11 @@ import {
   Send,
   DollarSign,
   Layers,
-  Split
+  Split,
+  CalendarCheck,
+  ShieldCheck,
+  Receipt,
+  Package
 } from 'lucide-react';
 import { NavigationTab, ChannelType } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -65,10 +69,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const primaryNavItems = [
     { id: 'flows' as NavigationTab, label: 'Fluxos de Automação', icon: GitFork, badge: '5' },
     { id: 'triggers' as NavigationTab, label: 'Gatilhos & Palavras-Chave', icon: Zap, badge: '4' },
+    { id: 'appointments' as NavigationTab, label: 'Agendamentos nos Canais', icon: CalendarCheck, badge: '5 Canais' },
     { id: 'comment_tools' as NavigationTab, label: 'Comentário ➔ Direct', icon: MessageSquareReply },
     { id: 'inbox' as NavigationTab, label: 'Atendimento ao Vivo', icon: Inbox, badge: unreadConversationsCount > 0 ? `${unreadConversationsCount}` : undefined, highlight: unreadConversationsCount > 0 },
     { id: 'contacts' as NavigationTab, label: 'Audiência & CRM', icon: Users, badge: '4.2k' },
-    { id: 'analytics' as NavigationTab, label: 'Resumo do Dia & Métricas', icon: BarChart3 }
+    { id: 'analytics' as NavigationTab, label: 'Resumo do Dia & Métricas', icon: BarChart3 },
+    { id: 'affiliates' as NavigationTab, label: 'Sistema de Afiliados', icon: DollarSign, badge: 'Até 40%' }
   ];
 
   // Secondary Low-Usage Items Grouped in Advanced Tools
@@ -78,7 +84,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'broadcast' as NavigationTab, label: 'Transmissão em Massa', icon: Radio }
   ];
 
+  // Admin SaaS Management Section
+  const adminNavItems = [
+    { id: 'admin_users' as NavigationTab, label: 'Todos os Usuários', icon: ShieldCheck, badge: 'Admin' },
+    { id: 'admin_subscriptions' as NavigationTab, label: 'Mensalidades & Faturas', icon: Receipt, badge: 'MRR' },
+    { id: 'admin_packages' as NavigationTab, label: 'Planos & Pacotes', icon: Package, badge: 'SaaS' }
+  ];
+
   const isCurrentTabInAdvanced = advancedNavItems.some((item) => item.id === currentTab);
+  const isCurrentTabInAdmin = adminNavItems.some((item) => item.id === currentTab);
+
+  const [isAdminOpen, setIsAdminOpen] = useState(
+    isCurrentTabInAdmin || true
+  );
 
   return (
     <aside id="main_sidebar" className="w-64 bg-white dark:bg-slate-900 border-r border-[#E2E8F0] dark:border-slate-800 flex flex-col justify-between h-screen shrink-0 select-none z-30 shadow-[1px_0_4px_rgba(0,0,0,0.02)] transition-colors">
@@ -321,6 +339,67 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       </div>
                       {item.badge && (
                         <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Admin SaaS Management Section */}
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              id="btn_toggle_admin_section"
+              onClick={() => setIsAdminOpen(!isAdminOpen)}
+              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                isCurrentTabInAdmin
+                  ? 'text-purple-600 dark:text-purple-400 bg-purple-50/70 dark:bg-purple-950/40'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <span className="font-bold">Painel do Admin</span>
+                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300">
+                  SaaS
+                </span>
+                {isCurrentTabInAdmin && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600" />
+                )}
+              </div>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isAdminOpen ? 'rotate-180 text-purple-600' : 'text-slate-400'}`} />
+            </button>
+
+            {/* Admin sub-items list */}
+            {isAdminOpen && (
+              <div className="mt-1 pl-2 space-y-0.5 border-l-2 border-purple-100 dark:border-purple-900/50 ml-3 py-0.5">
+                {adminNavItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      id={`nav_${item.id}`}
+                      onClick={() => onChangeTab(item.id)}
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                        isActive
+                          ? 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-bold'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-purple-600 dark:text-purple-400' : 'text-slate-400'}`} />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {item.badge && (
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                          item.id === 'admin_subscriptions' 
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
+                            : 'bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300'
+                        }`}>
                           {item.badge}
                         </span>
                       )}

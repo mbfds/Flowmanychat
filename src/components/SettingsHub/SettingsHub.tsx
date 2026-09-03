@@ -38,11 +38,14 @@ import {
   ChevronRight,
   Zap,
   Wrench,
+  CalendarCheck,
   ToggleLeft,
   ToggleRight,
   Info,
   Download,
-  HardDrive
+  HardDrive,
+  CreditCard,
+  TrendingUp
 } from 'lucide-react';
 import { 
   BotKnowledgeBase, 
@@ -73,6 +76,11 @@ import { MetaAppSetupWizard } from './MetaAppSetupWizard';
 import { MetaWebhooksValidator } from './MetaWebhooksValidator';
 import { MetaTokenValidator } from './MetaTokenValidator';
 import { BackupExportManager } from './BackupExportManager';
+import { PlansPackagesManager } from './PlansPackagesManager';
+import { AffiliateResellerHub } from './AffiliateResellerHub';
+import { McpServerHub } from './McpServerHub';
+import { WebhookStatusManager } from './WebhookStatusManager';
+import { WebhookConfigManager } from './WebhookConfigManager';
 
 interface SettingsHubProps {
   knowledgeBase: BotKnowledgeBase;
@@ -96,9 +104,15 @@ interface SettingsHubProps {
 // Available tabs across standard and tech modes
 type SettingsTab = 
   | 'channels' 
-  | 'meta_ai' 
-  | 'backup'
+  | 'webhook_status'
+  | 'webhook_config'
+  | 'webhook_logs'
+  | 'mcp'
+  | 'plans'
+  | 'affiliates'
   | 'team' 
+  | 'backup'
+  | 'meta_ai' 
   | 'custom_fields' 
   | 'domains'
   // Tech tabs
@@ -141,6 +155,33 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   const [webhooksSubTab, setWebhooksSubTab] = useState<'meta_validator' | 'config' | 'logs' | 'signature' | 'subscriptions' | 'retries'>('meta_validator');
   const [systemSubTab, setSystemSubTab] = useState<'database' | 'deploy' | 'rate_limits' | 'audit'>('database');
   const [channelsSubView, setChannelsSubView] = useState<'overview' | 'token_validator'>('overview');
+
+  // Track Webhook Connection Status for tab badge
+  const [currentWebhookStatus, setCurrentWebhookStatus] = useState<'verified' | 'pending' | 'error'>(() => {
+    try {
+      const saved = localStorage.getItem('manyflow_webhook_status');
+      if (saved === 'verified' || saved === 'pending' || saved === 'error') return saved;
+    } catch {}
+    return 'verified';
+  });
+
+  // Sync webhook status from storage periodically
+  useEffect(() => {
+    const checkStatus = () => {
+      try {
+        const saved = localStorage.getItem('manyflow_webhook_status');
+        if (saved === 'verified' || saved === 'pending' || saved === 'error') {
+          setCurrentWebhookStatus(saved);
+        }
+      } catch {}
+    };
+    window.addEventListener('storage', checkStatus);
+    const timer = setInterval(checkStatus, 2000);
+    return () => {
+      window.removeEventListener('storage', checkStatus);
+      clearInterval(timer);
+    };
+  }, []);
 
   const [formData, setFormData] = useState<BotKnowledgeBase>(knowledgeBase);
   const [isSaved, setIsSaved] = useState(false);
@@ -272,7 +313,100 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           </span>
         </button>
 
-        {/* ESSENTIAL TAB 2: INTELIGÊNCIA ARTIFICIAL */}
+        {/* ESSENTIAL TAB: STATUS DE CONEXÃO DOS WEBHOOKS (VERIFICADO / PENDENTE) */}
+        <button
+          id="tab_settings_webhook_status"
+          onClick={() => setActiveTab('webhook_status')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'webhook_status'
+              ? 'border-emerald-600 text-emerald-900 bg-emerald-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Radio className="w-4 h-4 text-emerald-600" />
+          <span>Status do Webhook</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black flex items-center gap-1 border ${
+            currentWebhookStatus === 'verified'
+              ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+              : 'bg-amber-100 text-amber-800 border-amber-200'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              currentWebhookStatus === 'verified' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+            }`} />
+            {currentWebhookStatus === 'verified' ? 'Verificado' : 'Pendente'}
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB: CONFIGURAÇÃO DE WEBHOOKS & EVENTOS DE CONVERSÃO */}
+        <button
+          id="tab_settings_webhook_config"
+          onClick={() => setActiveTab('webhook_config')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'webhook_config'
+              ? 'border-blue-600 text-blue-900 bg-blue-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Webhook className="w-4 h-4 text-blue-600" />
+          <span>Configuração de Webhooks</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-blue-100 text-blue-800">
+            {webhookSettings?.conversionEndpoints?.length || 0} URLs
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB 2: MONITOR DE LOGS DE WEBHOOK (TEMPO REAL) */}
+        <button
+          id="tab_settings_webhook_logs"
+          onClick={() => setActiveTab('webhook_logs')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'webhook_logs'
+              ? 'border-indigo-600 text-indigo-900 bg-indigo-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Radio className="w-4 h-4 text-indigo-600" />
+          <span>Logs de Webhook (Instagram & Messenger)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1 border border-emerald-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Ao Vivo
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB 2: PACOTES & MENSALIDADES (ADMIN CRUD) */}
+        <button
+          id="tab_settings_plans"
+          onClick={() => setActiveTab('plans')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'plans'
+              ? 'border-indigo-600 text-indigo-900 bg-indigo-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <CreditCard className="w-4 h-4 text-indigo-600" />
+          <span>Pacotes & Mensalidades</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-indigo-100 text-indigo-800">
+            Admin
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB 3: AFILIADOS & REVENDA */}
+        <button
+          id="tab_settings_affiliates"
+          onClick={() => setActiveTab('affiliates')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'affiliates'
+              ? 'border-emerald-600 text-emerald-900 bg-emerald-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <TrendingUp className="w-4 h-4 text-emerald-600" />
+          <span>Afiliados & Revenda</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-emerald-100 text-emerald-800">
+            30%-40%
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB 4: INTELIGÊNCIA ARTIFICIAL */}
         <button
           id="tab_settings_meta_ai"
           onClick={() => setActiveTab('meta_ai')}
@@ -284,6 +418,24 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         >
           <Sparkles className="w-4 h-4 text-purple-600" />
           <span>Inteligência Artificial (IA)</span>
+        </button>
+
+        {/* ESSENTIAL TAB 5: MCP SERVER (MODEL CONTEXT PROTOCOL) */}
+        <button
+          id="tab_settings_mcp"
+          onClick={() => setActiveTab('mcp')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'mcp'
+              ? 'border-indigo-600 text-indigo-900 bg-indigo-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Cpu className="w-4 h-4 text-purple-600" />
+          <span>MCP Server (Model Context Protocol)</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-purple-100 text-purple-800 flex items-center gap-1 border border-purple-200">
+            <Bot className="w-2.5 h-2.5" />
+            Claude & Cursor
+          </span>
         </button>
 
         {/* ESSENTIAL TAB 3: BACKUP & PORTABILIDADE (1-CLIQUE) */}
@@ -433,6 +585,30 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
                 <Key className="w-3.5 h-3.5" />
                 <span>Validador & Renovador de Token (1-Clique)</span>
               </button>
+              <button
+                id="btn_channels_jump_to_webhook_status"
+                onClick={() => setActiveTab('webhook_status')}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 cursor-pointer"
+              >
+                <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Status de Conexão Webhooks</span>
+              </button>
+              <button
+                id="btn_channels_jump_to_webhook_logs"
+                onClick={() => setActiveTab('webhook_logs')}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-pointer"
+              >
+                <Radio className="w-3.5 h-3.5 text-indigo-600 animate-pulse" />
+                <span>Monitor de Webhooks Meta (Ao Vivo)</span>
+              </button>
+              <button
+                id="btn_channels_jump_to_mcp"
+                onClick={() => setActiveTab('mcp')}
+                className="px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 cursor-pointer"
+              >
+                <Cpu className="w-3.5 h-3.5 text-purple-600" />
+                <span>Servidor MCP (Claude & Cursor)</span>
+              </button>
             </div>
 
             {/* Quick Helper to Tech Mode */}
@@ -452,6 +628,34 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
 
           {channelsSubView === 'overview' ? (
             <div className="space-y-5">
+              {/* Omnichannel Pre-defined Appointments Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50 via-indigo-50 to-emerald-50 border border-blue-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-blue-600 text-white shrink-0 mt-0.5 shadow-xs">
+                    <CalendarCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                        Motor de Agendamento Pré-Definido & Omnichannel
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        Ativo nos 5 Canais
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Todos os canais de atendimento conectados (Instagram, WhatsApp, Messenger, Telegram e Live Chat) já contam com fluxos de agendamento automático integrados aos gatilhos de palavras-chave.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-[11px] font-bold text-slate-500">
+                    Sincronizado com Google Calendar & CRM
+                  </span>
+                </div>
+              </div>
+
               {/* Connected channels grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Instagram Channel */}
@@ -651,7 +855,87 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* 2. ESSENTIAL TAB: INTELIGÊNCIA ARTIFICIAL (IA)            */}
+      {/* ESSENTIAL TAB: STATUS DE CONEXÃO DOS WEBHOOKS             */}
+      {/* ========================================================= */}
+      {activeTab === 'webhook_status' && (
+        <div className="space-y-4">
+          <WebhookStatusManager
+            webhookSettings={webhookSettings}
+            onUpdateWebhookSettings={onUpdateWebhookSettings}
+            onOpenLogs={() => setActiveTab('webhook_logs')}
+            onOpenConfig={() => setActiveTab('webhook_config')}
+          />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* ESSENTIAL TAB: CONFIGURAÇÃO DE WEBHOOKS (CONVERSÕES)     */}
+      {/* ========================================================= */}
+      {activeTab === 'webhook_config' && (
+        <div className="space-y-4">
+          <WebhookConfigManager
+            settings={webhookSettings || {
+              globalVerifyToken: 'manyflow_verify_token_secure_2026',
+              appSecret: 'mf_sec_89df2a3bc7e1480f90ab12d',
+              serverBaseUrl: window.location.origin + '/api/webhooks',
+              enableLogging: true,
+              verificationStatus: 'verified',
+              autoRetryFailed: true,
+              maxRetryAttempts: 3,
+              activeFields: ['messages', 'messaging_postbacks'],
+              conversionEndpoints: []
+            }}
+            onUpdateSettings={(updated) => {
+              if (onUpdateWebhookSettings) {
+                onUpdateWebhookSettings(updated);
+              }
+            }}
+            onOpenLogs={() => setActiveTab('webhook_logs')}
+          />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 2. ESSENTIAL TAB: MONITOR DE LOGS DE WEBHOOK (TEMPO REAL) */}
+      {/* ========================================================= */}
+      {activeTab === 'webhook_logs' && (
+        <div className="space-y-4">
+          <WebhookLogsViewer
+            onOpenFlow={onOpenFlow}
+            onOpenLiveChat={onOpenLiveChat}
+          />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 2.5 ESSENTIAL TAB: MCP SERVER (MODEL CONTEXT PROTOCOL)    */}
+      {/* ========================================================= */}
+      {activeTab === 'mcp' && (
+        <div className="space-y-4">
+          <McpServerHub />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 3. ESSENTIAL TAB: PACOTES & MENSALIDADES (ADMIN CRUD)     */}
+      {/* ========================================================= */}
+      {activeTab === 'plans' && (
+        <div className="space-y-4">
+          <PlansPackagesManager />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 3. ESSENTIAL TAB: SISTEMA DE AFILIADOS & REVENDA          */}
+      {/* ========================================================= */}
+      {activeTab === 'affiliates' && (
+        <div className="space-y-4">
+          <AffiliateResellerHub />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 4. ESSENTIAL TAB: INTELIGÊNCIA ARTIFICIAL (IA)            */}
       {/* ========================================================= */}
       {activeTab === 'meta_ai' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -700,6 +984,24 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
                   O robô utilizará as diretrizes ao lado para responder dúvidas, qualificar leads e agendar atendimentos humanos.
                 </p>
               </div>
+            </div>
+
+            {/* MCP Banner */}
+            <div className="bg-gradient-to-br from-indigo-900 to-purple-900 border border-indigo-700/60 rounded-2xl p-4 text-white shadow-xs space-y-2.5">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-purple-300" />
+                <span className="text-xs font-bold text-white">Servidor MCP (Claude & Cursor)</span>
+              </div>
+              <p className="text-[11px] text-slate-200 leading-relaxed">
+                Controle o ManyFlow diretamente do Claude Desktop ou Cursor IDE com ferramentas para ler leads, disparar fluxos e enviar mensagens.
+              </p>
+              <button
+                onClick={() => setActiveTab('mcp')}
+                className="w-full py-1.5 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer"
+              >
+                <span>Abrir Hub MCP</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
@@ -820,11 +1122,11 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* 6. ESSENTIAL TAB: DOMÍNIOS & MARCA                        */}
+      {/* 8. ESSENTIAL TAB: DOMÍNIOS & MARCA                        */}
       {/* ========================================================= */}
       {activeTab === 'domains' && (
         <div className="space-y-4">
-          <DomainManager />
+          <DomainManager isTechnicalMode={isTechMode} />
         </div>
       )}
 

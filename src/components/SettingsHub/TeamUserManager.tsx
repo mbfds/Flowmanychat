@@ -20,11 +20,14 @@ import {
   Search,
   MoreVertical,
   Activity,
-  Key
+  Key,
+  CreditCard,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { User, UserRole } from '../../types';
+import { User, UserRole, SubscriptionPlan } from '../../types';
 import { authService } from '../../services/authService';
+import { plansAndAffiliatesService } from '../../services/plansAndAffiliatesService';
 
 export const TeamUserManager: React.FC = () => {
   const { user: currentUser, tenant } = useAuth();
@@ -43,13 +46,16 @@ export const TeamUserManager: React.FC = () => {
   const [modalError, setModalError] = useState<string | null>(null);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Tab: 'members' vs 'rbac_matrix'
   const [viewTab, setViewTab] = useState<'members' | 'rbac_matrix'>('members');
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
 
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const userList = await authService.getUsers(tenant?.id || 'tenant_main');
+      const [userList, planList] = await Promise.all([
+        authService.getUsers(tenant?.id || 'tenant_main'),
+        plansAndAffiliatesService.getPlans()
+      ]);
       if (userList && userList.length > 0) {
         setUsers(userList);
       } else if (currentUser) {
@@ -57,6 +63,7 @@ export const TeamUserManager: React.FC = () => {
       } else {
         setUsers([]);
       }
+      setPlans(planList);
     } catch {
       // Ignored
     } finally {
@@ -67,6 +74,20 @@ export const TeamUserManager: React.FC = () => {
   useEffect(() => {
     fetchUsers();
   }, [tenant?.id]);
+
+  const handleChangePlan = async (targetUser: User, newPlanSlug: string) => {
+    const res = await authService.updateUser(targetUser.id, { plan: newPlanSlug } as any);
+    if (res.success) {
+      setUsers((prev) =>
+        prev.map((u) => (u.id === targetUser.id ? { ...u, plan: newPlanSlug } : u))
+      );
+      setFeedbackMsg({
+        type: 'success',
+        text: `Pacote do usuário ${targetUser.name} alterado para ${newPlanSlug.toUpperCase()}.`
+      });
+      setTimeout(() => setFeedbackMsg(null), 3000);
+    }
+  };
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -282,6 +303,7 @@ export const TeamUserManager: React.FC = () => {
                 <tr>
                   <th className="py-3 px-4">Usuário</th>
                   <th className="py-3 px-4">Papel / Função</th>
+                  <th className="py-3 px-4">Pacote / Mensalidade</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Último Acesso</th>
                   <th className="py-3 px-4 text-right">Ações</th>
@@ -290,14 +312,14 @@ export const TeamUserManager: React.FC = () => {
               <tbody className="divide-y divide-[#E2E8F0]">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-[#64748B]">
+                    <td colSpan={6} className="py-8 text-center text-[#64748B]">
                       <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-600" />
                       <span>Carregando membros da equipe...</span>
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-[#64748B]">
+                    <td colSpan={6} className="py-8 text-center text-[#64748B]">
                       Nenhum membro encontrado com os filtros aplicados.
                     </td>
                   </tr>
@@ -329,6 +351,23 @@ export const TeamUserManager: React.FC = () => {
                             <option value="manager">Gestor</option>
                             <option value="agent">Atendente</option>
                             <option value="viewer">Visualizador</option>
+                          </select>
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <CreditCard className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                          <select
+                            value={(u as any).plan || 'pro'}
+                            onChange={(e) => handleChangePlan(u, e.target.value)}
+                            className="text-[10px] font-bold bg-blue-50/80 text-blue-900 border border-blue-200 rounded-lg px-2 py-1 cursor-pointer"
+                          >
+                            {plans.map(p => (
+                              <option key={p.id} value={p.slug}>
+                                {p.name} (R$ {p.priceMonthly}/mês)
+                              </option>
+                            ))}
                           </select>
                         </div>
                       </td>

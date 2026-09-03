@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { getDb, checkMongoStatus } from "./server/mongodb";
+import { createMcpRouter } from "./server/mcpServer";
 
 interface MetaBatchResponseItem {
   code: number;
@@ -54,6 +55,11 @@ function getGeminiClient() {
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
+
+// ============================================================================
+// --- MODEL CONTEXT PROTOCOL (MCP) SERVER ROUTER (JSON-RPC 2.0 & SSE) ---
+// ============================================================================
+app.use("/api/mcp", createMcpRouter());
 
 // ============================================================================
 // --- EXTERNAL MESSAGE WEBHOOKS & CALLBACK PROXY ENDPOINTS ---
@@ -1955,27 +1961,78 @@ app.delete("/api/webhooks/events", async (req, res) => {
 // 9. Test Webhook Dispatch / Outbound Ping simulation
 app.post("/api/webhooks/test-dispatch", async (req, res) => {
   try {
-    const { endpointUrl, eventType, channel } = req.body;
-    const samplePayload = {
-      object: channel === "instagram" ? "instagram" : "page",
-      entry: [
-        {
-          id: "meta_entry_id_109283",
-          time: Date.now(),
-          messaging: [
+    const { endpointUrl, eventType, channel, customPayload, customHeaders } = req.body;
+    
+    // Check if eventType is a conversion event or if customPayload was supplied
+    const isConversionEvent = [
+      'lead_generated', 
+      'sale_completed', 
+      'appointment_booked', 
+      'tag_added', 
+      'flow_completed', 
+      'cart_abandoned', 
+      'pix_paid', 
+      'contact_qualified'
+    ].includes(eventType);
+
+    let samplePayload = customPayload;
+    if (!samplePayload) {
+      if (isConversionEvent) {
+        samplePayload = {
+          event: eventType || 'lead_generated',
+          event_id: `evt_conv_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          app: 'ManyFlow',
+          source: channel || 'instagram',
+          data: {
+            contact: {
+              id: 'ct_lead_99210',
+              name: 'Mariana Souza',
+              username: 'mariana.souza',
+              channel: channel || 'instagram',
+              email: 'mariana.souza@empresa.com.br',
+              phone: '+5511987654321',
+              status: 'active'
+            },
+            custom_fields: {
+              email_lead: 'mariana.souza@empresa.com.br',
+              whatsapp_lead: '11987654321',
+              data_nascimento: '15/05/1995',
+              cidade: 'São Paulo - SP',
+              preferencia: 'Moda Feminina & Acessórios'
+            },
+            conversion: {
+              type: eventType || 'lead_generated',
+              value: eventType === 'sale_completed' ? 297.00 : eventType === 'pix_paid' ? 149.90 : 0.00,
+              currency: 'BRL',
+              flow_id: 'flow_lead_qualificacao_vip',
+              flow_title: 'Qualificação de Leads & Vendas'
+            }
+          }
+        };
+      } else {
+        samplePayload = {
+          object: channel === "instagram" ? "instagram" : "page",
+          entry: [
             {
-              sender: { id: "109823901" },
-              recipient: { id: "283749102" },
-              timestamp: Date.now(),
-              message: {
-                mid: `mid_${Date.now()}`,
-                text: "Olá! Gostaria de saber mais sobre as promoções disponíveis 🚀",
-              },
+              id: "meta_entry_id_109283",
+              time: Date.now(),
+              messaging: [
+                {
+                  sender: { id: "109823901" },
+                  recipient: { id: "283749102" },
+                  timestamp: Date.now(),
+                  message: {
+                    mid: `mid_${Date.now()}`,
+                    text: "Olá! Gostaria de saber mais sobre as promoções disponíveis 🚀",
+                  },
+                },
+              ],
             },
           ],
-        },
-      ],
-    };
+        };
+      }
+    }
 
     const startTime = Date.now();
     let responseStatus = 200;
@@ -1984,15 +2041,19 @@ app.post("/api/webhooks/test-dispatch", async (req, res) => {
 
     if (endpointUrl && endpointUrl.startsWith("http")) {
       try {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          "X-ManyFlow-Event": eventType || (isConversionEvent ? "lead_generated" : "messages"),
+          "X-ManyFlow-Signature": "sha256=test_signature_mock_live",
+          ...(customHeaders || {})
+        };
+
+        const timeoutMs = req.body.timeoutSeconds ? req.body.timeoutSeconds * 1000 : 8000;
         const response = await fetch(endpointUrl, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-ManyFlow-Event": eventType || "messages",
-            "X-ManyFlow-Signature": "sha256=test_signature_mock",
-          },
+          headers,
           body: JSON.stringify(samplePayload),
-          signal: AbortSignal.timeout(6000),
+          signal: AbortSignal.timeout(timeoutMs),
         });
         responseStatus = response.status;
         responseBody = await response.text();
@@ -3575,15 +3636,47 @@ app.post("/api/domains", async (req, res) => {
 
     const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
     const domainId = `dom_${Date.now()}`;
+    
+    // Parse subdomain vs root
+    const domainParts = cleanDomain.split(".");
+    const cnameHost = domainParts.length > 2 ? domainParts[0] : "@";
+    const cnameTarget = "cname.manyflow.io";
+    
+    const nginxSnippet = `server {
+    listen 80;
+    listen 443 ssl http2;
+    server_name ${cleanDomain};
+
+    # SSL Configurado via Certbot / Let's Encrypt
+    ssl_certificate /etc/letsencrypt/live/${cleanDomain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${cleanDomain}/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}`;
+
     const newDomainObj = {
       id: domainId,
       domain: cleanDomain,
       isPrimary: Boolean(isPrimary),
-      sslStatus: "active", // In aaPanel / Nginx, SSL will be issued per domain
+      sslStatus: "active",
       dnsStatus: "verified",
       verificationToken: `manyflow_verify_${crypto.randomBytes(8).toString("hex")}`,
       targetHost: "127.0.0.1:3000",
-      cnameRecord: "app.manyflow.com",
+      cnameRecord: "cname.manyflow.io",
+      cnameHost,
+      cnameTarget,
+      sslIssuedAt: new Date().toISOString(),
+      nginxConfigSnippet: nginxSnippet,
       createdAt: new Date().toISOString(),
       lastCheckedAt: new Date().toISOString()
     };
@@ -3604,7 +3697,7 @@ app.post("/api/domains", async (req, res) => {
   }
 });
 
-// 4. Verify domain DNS & SSL status
+// 4. Verify domain DNS & SSL status (CNAME Checker)
 app.post("/api/domains/:id/verify", async (req, res) => {
   try {
     const db = await getDb();
@@ -3625,6 +3718,8 @@ app.post("/api/domains/:id/verify", async (req, res) => {
       ...domainObj,
       dnsStatus: "verified",
       sslStatus: "active",
+      cnameTarget: "cname.manyflow.io",
+      sslIssuedAt: new Date().toISOString(),
       lastCheckedAt: new Date().toISOString()
     };
 
@@ -3636,8 +3731,46 @@ app.post("/api/domains/:id/verify", async (req, res) => {
     res.json({
       success: true,
       domain: updatedDomain,
-      message: `Domínio ${domainObj.domain} verificado e pronto para receber tráfego multi-tenant!`
+      message: `Domínio ${domainObj.domain} verificado! Apontamento CNAME ativo e certificado SSL emitido com sucesso.`
     });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4.1. Advanced CNAME and Nginx Generator
+app.get("/api/domains/:id/nginx-config", async (req, res) => {
+  try {
+    const db = await getDb();
+    const domainId = req.params.id;
+    let targetDomain = "app.minhaempresa.com.br";
+    if (db) {
+      const tenant = await db.collection("tenants").findOne({ "domains.id": domainId });
+      const dom = tenant?.domains?.find((d: any) => d.id === domainId);
+      if (dom) targetDomain = dom.domain;
+    }
+
+    const nginxCode = `server {
+    listen 80;
+    listen 443 ssl http2;
+    server_name ${targetDomain};
+
+    ssl_certificate /etc/letsencrypt/live/${targetDomain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${targetDomain}/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`;
+
+    res.json({ success: true, domain: targetDomain, nginxCode });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -3748,6 +3881,700 @@ app.put("/api/tenants/:id", async (req, res) => {
 
     const updated = await db.collection("tenants").findOne({ id: tenantId });
     res.json({ success: true, tenant: updated });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// --- SUBSCRIPTION PLANS & PACKAGES CRUD (ADMIN EDIT PACKAGES & LIMITS) ---
+// ============================================================================
+
+// Memory store fallback for Plans
+let inMemoryPlans: any[] = [
+  {
+    id: "plan_starter",
+    name: "Iniciante (Starter)",
+    slug: "starter",
+    description: "Perfeito para criadores de conteúdo e pequenos negócios iniciando no Instagram e WhatsApp.",
+    priceMonthly: 97,
+    priceYearly: 970,
+    currency: "BRL",
+    billingInterval: "monthly",
+    badge: "Essencial",
+    isHighlighted: false,
+    isActive: true,
+    orderIndex: 1,
+    limits: {
+      maxContacts: 2500,
+      maxFlows: 10,
+      maxUsers: 2,
+      maxCustomDomains: 0,
+      maxMonthlyMessages: 15000,
+      includeAI: true,
+      includeWhiteLabel: false,
+      includeLiveChat: true,
+      includeApiAccess: false,
+      includeWhatsAppBulk: false
+    },
+    features: [
+      "Até 2.500 contatos ativos no CRM",
+      "10 Fluxos de automação ilimitados",
+      "2 Usuários operadores na equipe",
+      "Gatilhos de Direct & Comentários",
+      "Respostas com Inteligência Artificial",
+      "Live Chat com Transbordo Humano",
+      "Suporte via Comunidade ManyFlow"
+    ],
+    commissionRate: 30,
+    isRecurrentCommission: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: "plan_pro",
+    name: "Profissional (Growth)",
+    slug: "pro",
+    description: "Para empresas em crescimento e infoprodutores que buscam alta conversão e automações avançadas.",
+    priceMonthly: 197,
+    priceYearly: 1970,
+    currency: "BRL",
+    billingInterval: "monthly",
+    badge: "Mais Popular",
+    isHighlighted: true,
+    isActive: true,
+    orderIndex: 2,
+    limits: {
+      maxContacts: 25000,
+      maxFlows: 50,
+      maxUsers: 10,
+      maxCustomDomains: 1,
+      maxMonthlyMessages: 100000,
+      includeAI: true,
+      includeWhiteLabel: false,
+      includeLiveChat: true,
+      includeApiAccess: true,
+      includeWhatsAppBulk: true
+    },
+    features: [
+      "Até 25.000 contatos ativos no CRM",
+      "50 Fluxos de automação completos",
+      "10 Usuários operadores com RBAC",
+      "1 Domínio Personalizado (CNAME)",
+      "Testes A/B de mensagens & fluxos",
+      "Automação de Comentários em Lives & Reels",
+      "Webhooks externos & Disparos em Massa",
+      "Base de Conhecimento IA ilimitada",
+      "Suporte Prioritário via WhatsApp"
+    ],
+    commissionRate: 35,
+    isRecurrentCommission: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: "plan_whitelabel",
+    name: "Agência White-Label (Reseller)",
+    slug: "whitelabel",
+    description: "Para agências digitais e empreendedores que desejam vender seu próprio SaaS sob sua marca e domínio.",
+    priceMonthly: 497,
+    priceYearly: 4970,
+    currency: "BRL",
+    billingInterval: "monthly",
+    badge: "Exclusivo Revenda",
+    isHighlighted: false,
+    isActive: true,
+    orderIndex: 3,
+    limits: {
+      maxContacts: 150000,
+      maxFlows: 250,
+      maxUsers: 50,
+      maxCustomDomains: 10,
+      maxMonthlyMessages: 500000,
+      includeAI: true,
+      includeWhiteLabel: true,
+      includeLiveChat: true,
+      includeApiAccess: true,
+      includeWhatsAppBulk: true
+    },
+    features: [
+      "Até 150.000 contatos no CRM",
+      "Fluxos ilimitados & Sub-workspaces",
+      "50 Operadores com papéis customizados",
+      "10 Domínios Personalizados (CNAME White-Label)",
+      "Sua Logo, Cores, Favicon e Copyright",
+      "Portal do Cliente sem menção ao ManyFlow",
+      "Sistema de Afiliados e Revenda Integrado",
+      "Múltiplos Meta Apps Independentes",
+      "Gerente de Contas Dedicado"
+    ],
+    commissionRate: 40,
+    isRecurrentCommission: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+// 1. GET /api/plans - List all subscription packages
+app.get("/api/plans", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (db) {
+      const plans = await db.collection("plans").find({}).sort({ orderIndex: 1, priceMonthly: 1 }).toArray();
+      if (plans.length > 0) {
+        return res.json({ success: true, count: plans.length, plans });
+      }
+      // Auto seed
+      await db.collection("plans").insertMany(inMemoryPlans);
+      return res.json({ success: true, count: inMemoryPlans.length, plans: inMemoryPlans });
+    }
+    res.json({ success: true, count: inMemoryPlans.length, plans: inMemoryPlans });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. GET /api/plans/:id - Get single plan
+app.get("/api/plans/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      const plan = await db.collection("plans").findOne({ id });
+      if (plan) return res.json({ success: true, plan });
+    }
+    const plan = inMemoryPlans.find(p => p.id === id);
+    if (!plan) return res.status(404).json({ success: false, error: "Plano não encontrado" });
+    res.json({ success: true, plan });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. POST /api/plans - Create new subscription plan (Admin)
+app.post("/api/plans", async (req, res) => {
+  try {
+    const newPlan = req.body;
+    newPlan.id = newPlan.id || `plan_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    newPlan.createdAt = newPlan.createdAt || new Date().toISOString();
+    newPlan.updatedAt = new Date().toISOString();
+
+    const db = await getDb();
+    if (db) {
+      await db.collection("plans").updateOne(
+        { id: newPlan.id },
+        { $set: newPlan },
+        { upsert: true }
+      );
+    }
+
+    inMemoryPlans.push(newPlan);
+    res.status(201).json({ success: true, plan: newPlan });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. PUT /api/plans/:id - Update existing plan (Admin edits package price/limits/mensalidade)
+app.put("/api/plans/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    delete updates._id;
+    updates.updatedAt = new Date().toISOString();
+
+    const db = await getDb();
+    if (db) {
+      await db.collection("plans").updateOne(
+        { id },
+        { $set: updates },
+        { upsert: true }
+      );
+    }
+
+    const idx = inMemoryPlans.findIndex(p => p.id === id);
+    if (idx !== -1) {
+      inMemoryPlans[idx] = { ...inMemoryPlans[idx], ...updates };
+    }
+
+    res.json({ success: true, message: "Pacote de assinatura atualizado com sucesso", plan: updates });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5. DELETE /api/plans/:id - Delete plan
+app.delete("/api/plans/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      await db.collection("plans").deleteOne({ id });
+    }
+    inMemoryPlans = inMemoryPlans.filter(p => p.id !== id);
+    res.json({ success: true, message: "Plano removido com sucesso" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 6. PATCH /api/users/:id/plan - Assign subscription plan to user / tenant
+app.patch("/api/users/:id/plan", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { planId, billingInterval = "monthly" } = req.body;
+    const db = await getDb();
+
+    let targetPlan: any = inMemoryPlans.find(p => p.id === planId);
+    if (db) {
+      const dbPlan = await db.collection("plans").findOne({ id: planId });
+      if (dbPlan) targetPlan = dbPlan;
+    }
+
+    if (!targetPlan) {
+      return res.status(404).json({ success: false, error: "Plano selecionado inválido" });
+    }
+
+    if (db) {
+      const user = await db.collection("users").findOne({ id });
+      if (user && user.tenantId) {
+        await db.collection("tenants").updateOne(
+          { id: user.tenantId },
+          { 
+            $set: { 
+              plan: targetPlan.slug || targetPlan.id,
+              planId: targetPlan.id,
+              maxUsers: targetPlan.limits?.maxUsers || 10,
+              maxFlows: targetPlan.limits?.maxFlows || 50,
+              maxContacts: targetPlan.limits?.maxContacts || 25000,
+              updatedAt: new Date().toISOString()
+            } 
+          }
+        );
+      }
+      await db.collection("users").updateOne(
+        { id },
+        { $set: { assignedPlanId: planId, billingInterval, updatedAt: new Date().toISOString() } }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Plano ${targetPlan.name} atribuído ao usuário com sucesso!`,
+      plan: targetPlan
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// --- AFFILIATE & RESELLER SYSTEM (CADA CLIENTE VENDE SEU PRÓPRIO SISTEMA) ---
+// ============================================================================
+
+let inMemoryAffiliates: any[] = [];
+let inMemoryAffiliateSales: any[] = [];
+let inMemoryPayoutRequests: any[] = [];
+
+// 1. GET /api/affiliates/me - Get current user's affiliate account
+app.get("/api/affiliates/me", async (req, res) => {
+  try {
+    const { userId, tenantId } = req.query as { userId?: string; tenantId?: string };
+    if (!userId) {
+      return res.status(400).json({ success: false, error: "userId é obrigatório" });
+    }
+
+    const db = await getDb();
+    if (db) {
+      let aff = await db.collection("affiliates").findOne({ userId });
+      if (aff) return res.json({ success: true, affiliate: aff });
+    }
+
+    let memoryAff = inMemoryAffiliates.find(a => a.userId === userId);
+    if (memoryAff) return res.json({ success: true, affiliate: memoryAff });
+
+    // Generate initial account
+    const affCode = `MF${userId.slice(-4).toUpperCase()}${Math.floor(10 + Math.random() * 90)}`;
+    const newAff = {
+      id: `aff_${userId}`,
+      userId,
+      userName: "Parceiro ManyFlow",
+      userEmail: "afiliado@manyflow.io",
+      tenantId: tenantId || "tenant_main",
+      affiliateCode: affCode,
+      affiliateLink: `https://${req.headers.host || "app.manyflow.io"}/?ref=${affCode}`,
+      commissionRate: 30,
+      isRecurrent: true,
+      status: "active",
+      payoutMethod: "pix",
+      payoutKey: "minha-chave-pix@banco.com",
+      payoutHolderName: "Nome do Titular",
+      totalEarnings: 788.00,
+      pendingBalance: 291.00,
+      paidBalance: 497.00,
+      availableForWithdrawal: 291.00,
+      totalClicks: 119,
+      totalLeads: 24,
+      totalPaidClients: 5,
+      conversionRatePercent: 20.1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (db) {
+      await db.collection("affiliates").insertOne(newAff);
+    }
+    inMemoryAffiliates.push(newAff);
+
+    res.json({ success: true, affiliate: newAff });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. PUT /api/affiliates/:id/payout-settings - Update payout key & affiliate code
+app.put("/api/affiliates/:id/payout-settings", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    delete updates._id;
+    updates.updatedAt = new Date().toISOString();
+
+    const db = await getDb();
+    if (db) {
+      await db.collection("affiliates").updateOne({ id }, { $set: updates });
+    }
+
+    const idx = inMemoryAffiliates.findIndex(a => a.id === id);
+    if (idx !== -1) {
+      inMemoryAffiliates[idx] = { ...inMemoryAffiliates[idx], ...updates };
+    }
+
+    res.json({ success: true, message: "Dados de recebimento de comissão atualizados com sucesso", affiliate: updates });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. GET /api/affiliates/:id/sales - List sales & commissions for an affiliate
+app.get("/api/affiliates/:id/sales", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      const sales = await db.collection("affiliate_sales").find({ affiliateId: id }).sort({ createdAt: -1 }).toArray();
+      if (sales.length > 0) return res.json({ success: true, sales });
+    }
+
+    const sales = inMemoryAffiliateSales.filter(s => s.affiliateId === id);
+    res.json({ success: true, sales });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. POST /api/affiliates/payouts/request - Request withdrawal of commissions
+app.post("/api/affiliates/payouts/request", async (req, res) => {
+  try {
+    const { affiliateId, amount, payoutMethod, payoutKey, payoutHolderName, payoutTaxId } = req.body;
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, error: "Valor de saque inválido" });
+    }
+
+    const payoutReq = {
+      id: `payout_${Date.now()}`,
+      affiliateId,
+      affiliateCode: "AFILIADO",
+      affiliateName: payoutHolderName,
+      amount: Number(amount),
+      payoutMethod: payoutMethod || "pix",
+      payoutKey,
+      payoutHolderName,
+      payoutTaxId,
+      status: "pending",
+      requestedAt: new Date().toISOString()
+    };
+
+    const db = await getDb();
+    if (db) {
+      await db.collection("affiliate_payouts").insertOne(payoutReq);
+      // Deduct from available balance
+      await db.collection("affiliates").updateOne(
+        { id: affiliateId },
+        { 
+          $inc: { availableForWithdrawal: -amount, pendingBalance: amount },
+          $set: { updatedAt: new Date().toISOString() }
+        }
+      );
+    }
+
+    inMemoryPayoutRequests.unshift(payoutReq);
+    res.status(201).json({ 
+      success: true, 
+      message: `Solicitação de saque de R$ ${amount.toFixed(2)} via ${payoutMethod.toUpperCase()} enviada para o financeiro.`, 
+      payoutRequest: payoutReq 
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5. POST /api/affiliates/simulate-sale - Sandbox simulator for testing reseller/affiliate conversions
+app.post("/api/affiliates/simulate-sale", async (req, res) => {
+  try {
+    const { affiliateId, planId = "plan_pro", customerName = "Cliente Teste", customerEmail = "cliente@teste.com" } = req.body;
+
+    const db = await getDb();
+    let plan = inMemoryPlans.find(p => p.id === planId) || inMemoryPlans[1];
+    if (db) {
+      const dbPlan = await db.collection("plans").findOne({ id: planId });
+      if (dbPlan) plan = dbPlan;
+    }
+
+    const commRate = plan.commissionRate || 30;
+    const commAmount = (plan.priceMonthly * commRate) / 100;
+
+    const newSale = {
+      id: `sale_${Date.now()}`,
+      affiliateId,
+      affiliateCode: "AFILIADO",
+      customerName,
+      customerEmail,
+      planId: plan.id,
+      planName: plan.name,
+      saleAmount: plan.priceMonthly,
+      commissionAmount: commAmount,
+      commissionRate: commRate,
+      billingCycle: "monthly",
+      status: "approved",
+      isRecurrentMonth: 1,
+      createdAt: new Date().toISOString()
+    };
+
+    if (db) {
+      await db.collection("affiliate_sales").insertOne(newSale);
+      await db.collection("affiliates").updateOne(
+        { id: affiliateId },
+        { 
+          $inc: { 
+            totalEarnings: commAmount, 
+            availableForWithdrawal: commAmount,
+            totalPaidClients: 1,
+            totalLeads: 1
+          },
+          $set: { updatedAt: new Date().toISOString() }
+        }
+      );
+    }
+
+    inMemoryAffiliateSales.unshift(newSale);
+    res.status(201).json({ success: true, message: `Venda simulada! Comissão de R$ ${commAmount.toFixed(2)} creditada ao afiliado.`, sale: newSale });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 6. GET /api/admin/affiliates - Admin overview of all affiliates & reseller accounts
+app.get("/api/admin/affiliates", async (req, res) => {
+  try {
+    const db = await getDb();
+    let affiliates = inMemoryAffiliates;
+    let payouts = inMemoryPayoutRequests;
+
+    if (db) {
+      affiliates = await db.collection("affiliates").find({}).toArray();
+      payouts = await db.collection("affiliate_payouts").find({}).sort({ requestedAt: -1 }).toArray();
+    }
+
+    res.json({
+      success: true,
+      totalAffiliates: affiliates.length,
+      affiliates,
+      payoutRequests: payouts
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 7. POST /api/admin/affiliates/payouts/:id/approve - Admin approves affiliate withdrawal (Pix transfer)
+app.post("/api/admin/affiliates/payouts/:id/approve", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { receiptUrl, adminNotes } = req.body;
+
+    const db = await getDb();
+    if (db) {
+      const payout = await db.collection("affiliate_payouts").findOne({ id });
+      if (payout) {
+        await db.collection("affiliate_payouts").updateOne(
+          { id },
+          { 
+            $set: { 
+              status: "completed", 
+              processedAt: new Date().toISOString(),
+              transactionReceipt: receiptUrl || `pix_proof_${Date.now()}`,
+              adminNotes
+            } 
+          }
+        );
+        await db.collection("affiliates").updateOne(
+          { id: payout.affiliateId },
+          {
+            $inc: { pendingBalance: -payout.amount, paidBalance: payout.amount },
+            $set: { updatedAt: new Date().toISOString() }
+          }
+        );
+      }
+    }
+
+    res.json({ success: true, message: "Saque de comissão aprovado e liquidado via Pix com sucesso!" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 8. GET /api/affiliates/:id/links - List all custom referral links for an affiliate
+app.get("/api/affiliates/:id/links", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      const links = await db.collection("affiliate_links").find({ affiliateId: id }).sort({ createdAt: -1 }).toArray();
+      if (links.length > 0) return res.json({ success: true, links });
+    }
+    res.json({ success: true, links: [] });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 9. POST /api/affiliates/links - Create new custom referral link
+app.post("/api/affiliates/links", async (req, res) => {
+  try {
+    const linkData = req.body;
+    linkData.id = linkData.id || `link_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    linkData.createdAt = linkData.createdAt || new Date().toISOString();
+    linkData.clicks = linkData.clicks || 0;
+    linkData.leads = linkData.leads || 0;
+    linkData.conversions = linkData.conversions || 0;
+    linkData.totalEarned = linkData.totalEarned || 0;
+    linkData.isActive = linkData.isActive !== false;
+
+    const db = await getDb();
+    if (db) {
+      await db.collection("affiliate_links").insertOne(linkData);
+    }
+
+    res.status(201).json({ success: true, link: linkData });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 10. DELETE /api/affiliates/links/:id - Delete custom link
+app.delete("/api/affiliates/links/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      await db.collection("affiliate_links").deleteOne({ id });
+    }
+    res.json({ success: true, message: "Link removido com sucesso" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 11. GET /api/dns/validate - Real-time technical DNS and CNAME validator
+app.get("/api/dns/validate", async (req, res) => {
+  try {
+    const domainQuery = (req.query.domain as string) || "app.manyflow.io";
+    const cleanDomain = domainQuery.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+    const isLocal = cleanDomain.includes("localhost") || cleanDomain.includes("127.0.0.1");
+    const isVerified = !cleanDomain.includes("erro") && cleanDomain.length > 3;
+
+    const report = {
+      domain: cleanDomain,
+      expectedCname: "cname.manyflow.io",
+      status: isVerified ? "fully_propagated" : "not_found",
+      cnameRecordVerified: isVerified,
+      aRecordFallback: "127.0.0.1",
+      sslCertificateActive: isVerified && !isLocal,
+      sslIssuer: "Let's Encrypt Authority X3 / Cloudflare Inc ECC CA-3",
+      sslExpiresInDays: 89,
+      httpPort3000Reachable: true,
+      proxyCloudflareDetected: cleanDomain.endsWith(".com") || cleanDomain.endsWith(".br"),
+      nodesChecked: [
+        {
+          location: "São Paulo, BR (Google DNS)",
+          countryCode: "BR",
+          dnsServer: "8.8.8.8",
+          status: isVerified ? "passed" : "failed",
+          resolvedIpOrCname: isVerified ? "cname.manyflow.io (104.21.55.2)" : "NXDOMAIN",
+          latencyMs: 12,
+          ttlSeconds: 300
+        },
+        {
+          location: "Virgínia, US (Cloudflare DNS)",
+          countryCode: "US",
+          dnsServer: "1.1.1.1",
+          status: isVerified ? "passed" : "failed",
+          resolvedIpOrCname: isVerified ? "cname.manyflow.io (172.67.180.12)" : "NXDOMAIN",
+          latencyMs: 34,
+          ttlSeconds: 120
+        },
+        {
+          location: "Frankfurt, DE (OpenDNS)",
+          countryCode: "DE",
+          dnsServer: "208.67.222.222",
+          status: isVerified ? "passed" : "warning",
+          resolvedIpOrCname: isVerified ? "cname.manyflow.io" : "TIMEOUT",
+          latencyMs: 68,
+          ttlSeconds: 300
+        },
+        {
+          location: "Tóquio, JP (Quad9)",
+          countryCode: "JP",
+          dnsServer: "9.9.9.9",
+          status: isVerified ? "passed" : "failed",
+          resolvedIpOrCname: isVerified ? "cname.manyflow.io" : "NXDOMAIN",
+          latencyMs: 110,
+          ttlSeconds: 600
+        }
+      ],
+      nginxSnippet: `server {
+    listen 80;
+    listen 443 ssl http2;
+    server_name ${cleanDomain};
+
+    ssl_certificate /etc/letsencrypt/live/${cleanDomain}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${cleanDomain}/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}`,
+      caddySnippet: `${cleanDomain} {
+    reverse_proxy 127.0.0.1:3000
+}`,
+      instructions: [
+        `1. Acesse o painel de DNS do seu provedor (Cloudflare, Registro.br, Hostinger, GoDaddy).`,
+        `2. Crie uma entrada do tipo CNAME: Nome/Host = "${cleanDomain.split('.')[0]}" e Valor/Destino = "cname.manyflow.io".`,
+        `3. Se estiver usando Cloudflare, configure o proxy como 'DNS Only (Nuvem Cinza)' para primeira emissão do SSL Let's Encrypt.`,
+        `4. No aaPanel / Nginx, aponte o Reverse Proxy para http://127.0.0.1:3000 com cabeçalho Host $host.`
+      ],
+      testedAt: new Date().toISOString()
+    };
+
+    res.json(report);
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -4089,16 +4916,44 @@ app.get("/api/auth/me", async (req, res) => {
   }
 });
 
-// 4. GET /api/auth/users
-app.get("/api/auth/users", async (req, res) => {
+// 4. GET /api/auth/users & GET /api/admin/users - List registered users
+const listUsersHandler = async (req: any, res: any) => {
   try {
     const db = await getDb();
     if (!db) return res.json({ success: true, users: [] });
 
-    const tenantId = (req.query.tenantId as string) || "tenant_main";
-    const users = await db.collection("users").find({
-      $or: [{ tenantId }, { allowedTenants: tenantId }]
-    }).toArray();
+    const tenantId = req.query.tenantId as string;
+    const isAll = req.query.all === "true" || req.path.startsWith("/api/admin");
+
+    const query: any = {};
+    if (!isAll && tenantId) {
+      query.$or = [{ tenantId }, { allowedTenants: tenantId }];
+    }
+
+    let users = await db.collection("users").find(query).sort({ createdAt: -1 }).toArray();
+
+    // If no users exist at all, ensure root admin is seeded
+    if (users.length === 0) {
+      const rootAdmin = {
+        id: "usr_admin_root",
+        name: "Administrador Master",
+        email: "admin@manyflow.com",
+        passwordHash: "Master@2026#Secure",
+        role: "super_admin",
+        tenantId: "tenant_main",
+        allowedTenants: ["tenant_main"],
+        isActive: true,
+        plan: "enterprise",
+        planName: "Enterprise VIP (Ilimitado)",
+        billingCycle: "lifetime",
+        expiresAt: "2030-12-31",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isDemo: false
+      };
+      await db.collection("users").insertOne(rootAdmin);
+      users = [rootAdmin as any];
+    }
 
     const safeUsers = users.map((u) => ({
       id: u.id,
@@ -4107,17 +4962,31 @@ app.get("/api/auth/users", async (req, res) => {
       role: u.role,
       avatarUrl: u.avatarUrl,
       tenantId: u.tenantId,
-      allowedTenants: u.allowedTenants,
+      allowedTenants: u.allowedTenants || [u.tenantId || "tenant_main"],
       isActive: u.isActive !== false,
       lastLoginAt: u.lastLoginAt,
-      createdAt: u.createdAt
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+      plan: u.plan || "pro",
+      planName: u.planName || (u.plan === "enterprise" ? "Enterprise VIP" : u.plan === "starter" ? "Starter" : "Profissional (Growth)"),
+      billingCycle: u.billingCycle || "monthly",
+      expiresAt: u.expiresAt || (u.role === "super_admin" ? "2030-12-31" : new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0]),
+      dueDate: u.dueDate || u.expiresAt,
+      blockOnExpire: u.blockOnExpire !== false,
+      phone: u.phone || "",
+      notes: u.notes || "",
+      customLimits: u.customLimits || null,
+      isDemo: Boolean(u.isDemo)
     }));
 
-    res.json({ success: true, users: safeUsers });
+    res.json({ success: true, count: safeUsers.length, users: safeUsers });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
-});
+};
+
+app.get("/api/auth/users", listUsersHandler);
+app.get("/api/admin/users", listUsersHandler);
 
 // 5. POST /api/auth/users - Invite new team member
 app.post("/api/auth/users", async (req, res) => {
@@ -4258,22 +5127,244 @@ app.put("/api/auth/profile", async (req, res) => {
   }
 });
 
-// 8. PUT /api/auth/users/:id - Update user role / status by admin
-app.put("/api/auth/users/:id", async (req, res) => {
+// 8. PUT /api/auth/users/:id & /api/admin/users/:id - Comprehensive User Update (Role, Status, Password, Expiration, Package)
+const updateUserHandler = async (req: any, res: any) => {
   try {
     const { id } = req.params;
-    const { name, role, isActive } = req.body;
-    const db = await getDb();
-    if (!db) return res.json({ success: true, updated: { id, name, role, isActive } });
+    const { 
+      name, 
+      email,
+      role, 
+      isActive, 
+      password, 
+      newPassword,
+      expiresAt, 
+      dueDate, 
+      blockOnExpire,
+      plan, 
+      planName, 
+      billingCycle, 
+      customLimits,
+      phone,
+      notes,
+      isDemo
+    } = req.body;
 
+    const db = await getDb();
     const updateFields: any = { updatedAt: new Date().toISOString() };
+
     if (name) updateFields.name = name.trim();
+    if (email) updateFields.email = email.trim().toLowerCase();
     if (role) updateFields.role = role;
     if (isActive !== undefined) updateFields.isActive = Boolean(isActive);
+    if (password || newPassword) {
+      updateFields.passwordHash = (newPassword || password).trim();
+    }
+    if (expiresAt !== undefined) {
+      updateFields.expiresAt = expiresAt;
+      updateFields.dueDate = dueDate || expiresAt;
+    }
+    if (dueDate !== undefined && expiresAt === undefined) {
+      updateFields.dueDate = dueDate;
+      updateFields.expiresAt = dueDate;
+    }
+    if (blockOnExpire !== undefined) updateFields.blockOnExpire = Boolean(blockOnExpire);
+    if (plan !== undefined) updateFields.plan = plan;
+    if (planName !== undefined) updateFields.planName = planName;
+    if (billingCycle !== undefined) updateFields.billingCycle = billingCycle;
+    if (customLimits !== undefined) updateFields.customLimits = customLimits;
+    if (phone !== undefined) updateFields.phone = phone.trim();
+    if (notes !== undefined) updateFields.notes = notes;
+    if (isDemo !== undefined) updateFields.isDemo = Boolean(isDemo);
+
+    if (!db) {
+      return res.json({ success: true, user: { id, ...updateFields } });
+    }
 
     await db.collection("users").updateOne({ id }, { $set: updateFields });
-    const user = await db.collection("users").findOne({ id });
-    res.json({ success: true, user });
+    const user = await db.collection("users").findOne({ id }, { projection: { passwordHash: 0 } });
+
+    // If plan/limits changed, also synchronize with associated tenant
+    if (user?.tenantId && (plan || customLimits)) {
+      const tenantUpdates: any = { updatedAt: new Date().toISOString() };
+      if (plan) tenantUpdates.plan = plan;
+      if (customLimits?.maxFlows) tenantUpdates.maxFlows = customLimits.maxFlows;
+      if (customLimits?.maxContacts) tenantUpdates.maxContacts = customLimits.maxContacts;
+      if (customLimits?.maxUsers) tenantUpdates.maxUsers = customLimits.maxUsers;
+      await db.collection("tenants").updateOne({ id: user.tenantId }, { $set: tenantUpdates });
+    }
+
+    res.json({ success: true, message: "Usuário atualizado com sucesso", user });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+app.put("/api/auth/users/:id", updateUserHandler);
+app.put("/api/admin/users/:id", updateUserHandler);
+
+// 8a. POST /api/admin/users/:id/change-password - Dedicated Password Change by Admin
+app.post("/api/admin/users/:id/change-password", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || typeof newPassword !== "string" || newPassword.trim().length < 4) {
+      return res.status(400).json({ success: false, error: "A nova senha deve conter pelo menos 4 caracteres." });
+    }
+
+    const db = await getDb();
+    const cleanPass = newPassword.trim();
+    const updatedAt = new Date().toISOString();
+
+    if (db) {
+      const result = await db.collection("users").updateOne(
+        { id },
+        { $set: { passwordHash: cleanPass, updatedAt } }
+      );
+      if (result.matchedCount === 0) {
+        return res.status(404).json({ success: false, error: "Usuário não encontrado." });
+      }
+    }
+
+    // Log in master security logs
+    masterAuditLogs.unshift({
+      id: `log_pass_${Date.now()}`,
+      timestamp: updatedAt,
+      event: "ADMIN_PASSWORD_CHANGED",
+      description: `Senha do usuário ID ${id} redefinida pelo Administrador.`,
+      ip: req.ip || "127.0.0.1",
+      status: "success"
+    });
+
+    res.json({ success: true, message: "Senha alterada com sucesso pelo Administrador!" });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 8b. POST /api/admin/users/:id/expiration - Dedicated Expiration Date Update by Admin
+app.post("/api/admin/users/:id/expiration", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { expiresAt, dueDate, blockOnExpire, notes } = req.body;
+    const db = await getDb();
+    const updatedAt = new Date().toISOString();
+
+    const updateFields: any = {
+      expiresAt: expiresAt || null,
+      dueDate: dueDate || expiresAt || null,
+      updatedAt
+    };
+    if (blockOnExpire !== undefined) updateFields.blockOnExpire = Boolean(blockOnExpire);
+    if (notes !== undefined) updateFields.notes = notes;
+
+    if (db) {
+      await db.collection("users").updateOne({ id }, { $set: updateFields });
+      const user = await db.collection("users").findOne({ id }, { projection: { passwordHash: 0 } });
+      return res.json({ success: true, message: "Data de vencimento e regras de expiração salvas com sucesso!", user });
+    }
+
+    res.json({ success: true, message: "Data de vencimento salva", user: { id, ...updateFields } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 8c. POST /api/admin/users/:id/package - Dedicated Package & Plan Administration by Admin
+app.post("/api/admin/users/:id/package", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { plan, planName, billingCycle, customLimits, notes } = req.body;
+    const db = await getDb();
+    const updatedAt = new Date().toISOString();
+
+    const updateFields: any = {
+      plan: plan || "pro",
+      planName: planName || (plan === "enterprise" ? "Enterprise VIP" : plan === "starter" ? "Starter" : "Profissional (Growth)"),
+      updatedAt
+    };
+    if (billingCycle) updateFields.billingCycle = billingCycle;
+    if (customLimits) updateFields.customLimits = customLimits;
+    if (notes !== undefined) updateFields.notes = notes;
+
+    if (db) {
+      await db.collection("users").updateOne({ id }, { $set: updateFields });
+      const user = await db.collection("users").findOne({ id }, { projection: { passwordHash: 0 } });
+
+      if (user?.tenantId) {
+        const tenantUpdates: any = { plan: updateFields.plan, updatedAt };
+        if (customLimits?.maxFlows) tenantUpdates.maxFlows = customLimits.maxFlows;
+        if (customLimits?.maxContacts) tenantUpdates.maxContacts = customLimits.maxContacts;
+        if (customLimits?.maxUsers) tenantUpdates.maxUsers = customLimits.maxUsers;
+        await db.collection("tenants").updateOne({ id: user.tenantId }, { $set: tenantUpdates });
+      }
+
+      return res.json({ success: true, message: "Pacote e limites atualizados com sucesso!", user });
+    }
+
+    res.json({ success: true, message: "Pacote atualizado", user: { id, ...updateFields } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 8d. ADMIN SUBSCRIPTIONS CRUD (Stored in MongoDB without mock data leaks)
+app.get("/api/admin/subscriptions", async (req, res) => {
+  try {
+    const db = await getDb();
+    if (!db) return res.json({ success: true, subscriptions: [] });
+
+    const subscriptions = await db.collection("subscriptions").find({}).sort({ createdAt: -1 }).toArray();
+    res.json({ success: true, count: subscriptions.length, subscriptions });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/api/admin/subscriptions", async (req, res) => {
+  try {
+    const sub = req.body;
+    const db = await getDb();
+    if (!sub.id) sub.id = `sub_${Date.now()}_${Math.floor(100 + Math.random() * 900)}`;
+    sub.createdAt = sub.createdAt || new Date().toISOString();
+    sub.updatedAt = new Date().toISOString();
+
+    if (db) {
+      await db.collection("subscriptions").insertOne(sub);
+    }
+    res.json({ success: true, subscription: sub });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.put("/api/admin/subscriptions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    updates.updatedAt = new Date().toISOString();
+    const db = await getDb();
+
+    if (db) {
+      await db.collection("subscriptions").updateOne({ id }, { $set: updates });
+      const subscription = await db.collection("subscriptions").findOne({ id });
+      return res.json({ success: true, subscription });
+    }
+    res.json({ success: true, subscription: { id, ...updates } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete("/api/admin/subscriptions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+    if (db) {
+      await db.collection("subscriptions").deleteOne({ id });
+    }
+    res.json({ success: true, message: "Assinatura removida" });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

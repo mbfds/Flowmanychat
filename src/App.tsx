@@ -55,6 +55,21 @@ const HomePage = lazy(() =>
 const UserProfileModal = lazy(() =>
   import('./components/Auth/UserProfileModal').then((m) => ({ default: m.UserProfileModal }))
 );
+const AffiliateSystemModule = lazy(() =>
+  import('./components/Affiliates/AffiliateSystemModule').then((m) => ({ default: m.AffiliateSystemModule }))
+);
+const AppointmentsHub = lazy(() =>
+  import('./components/Appointments/AppointmentsHub').then((m) => ({ default: m.AppointmentsHub }))
+);
+const AdminUsersManager = lazy(() =>
+  import('./components/Admin/AdminUsersManager').then((m) => ({ default: m.AdminUsersManager }))
+);
+const AdminSubscriptionsManager = lazy(() =>
+  import('./components/Admin/AdminSubscriptionsManager').then((m) => ({ default: m.AdminSubscriptionsManager }))
+);
+const AdminPackagesManager = lazy(() =>
+  import('./components/Admin/AdminPackagesManager').then((m) => ({ default: m.AdminPackagesManager }))
+);
 
 import {
   INITIAL_FLOWS,
@@ -152,6 +167,29 @@ function MainApp() {
     dbService.updateFlow(updatedFlow.id, updatedFlow).catch((err) => {
       console.warn('[App] Erro ao sincronizar fluxo no MongoDB:', err);
     });
+  };
+
+  const handleImportFlow = (importedFlow: Flow, asNewFlow: boolean = true) => {
+    if (asNewFlow) {
+      const newFlowId = `flow_imported_${Date.now()}`;
+      const newFlow: Flow = {
+        ...importedFlow,
+        id: newFlowId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      setFlows((prev) => [newFlow, ...prev]);
+      setSelectedFlowId(newFlowId);
+      dbService.saveFlowsBulk([newFlow]).catch((err) => {
+        console.warn('[App] Erro ao salvar fluxo importado no MongoDB:', err);
+      });
+    } else {
+      handleUpdateFlow({
+        ...importedFlow,
+        id: selectedFlowId,
+        updatedAt: new Date().toISOString()
+      });
+    }
   };
 
   const handleCreateNewFlow = () => {
@@ -394,8 +432,12 @@ function MainApp() {
                 currentTab === 'inbox' ? 'Atendimento ao Vivo (Inbox)' : 
                 currentTab === 'contacts' ? 'Gestão de Contatos & CRM' : 
                 currentTab === 'triggers' ? 'Gatilhos de Palavras-Chave' : 
+                currentTab === 'appointments' ? 'Central de Agendamentos Omnichannel' :
                 currentTab === 'comment_tools' ? 'Automações de Comentários' :
                 currentTab === 'broadcast' ? 'Campanhas de Disparo em Massa' : 
+                currentTab === 'admin_users' ? 'Gestão de Usuários (Admin)' :
+                currentTab === 'admin_subscriptions' ? 'Gestão de Mensalidades & Faturas' :
+                currentTab === 'admin_packages' ? 'Gestão de Planos & Pacotes' :
                 'Central de Configurações'
               }...`} 
             />
@@ -404,6 +446,7 @@ function MainApp() {
               <FlowCanvas
                 flow={activeFlow}
                 onUpdateFlow={handleUpdateFlow}
+                onImportFlow={handleImportFlow}
                 openSimulator={() => setIsSimulatorOpen(true)}
                 openAIGenerator={() => setIsAIGeneratorOpen(true)}
                 openTemplates={() => setIsTemplatesModalOpen(true)}
@@ -497,6 +540,35 @@ function MainApp() {
                 onOpenSimulator={(flowId) => {
                   if (flowId) setSelectedFlowId(flowId);
                   setIsSimulatorOpen(true);
+                }}
+              />
+            )}
+
+            {currentTab === 'affiliates' && (
+              <AffiliateSystemModule />
+            )}
+
+            {currentTab === 'admin_users' && (
+              <AdminUsersManager />
+            )}
+
+            {currentTab === 'admin_subscriptions' && (
+              <AdminSubscriptionsManager />
+            )}
+
+            {currentTab === 'admin_packages' && (
+              <AdminPackagesManager />
+            )}
+
+            {currentTab === 'appointments' && (
+              <AppointmentsHub
+                onOpenSimulator={(flowId) => {
+                  if (flowId) setSelectedFlowId(flowId);
+                  setIsSimulatorOpen(true);
+                }}
+                onNavigateToFlows={(flowId) => {
+                  if (flowId) setSelectedFlowId(flowId);
+                  setCurrentTab('flows');
                 }}
               />
             )}
