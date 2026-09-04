@@ -105,6 +105,7 @@ interface SettingsHubProps {
 type SettingsTab = 
   | 'channels' 
   | 'webhook_status'
+  | 'external_webhooks'
   | 'webhook_config'
   | 'webhook_logs'
   | 'mcp'
@@ -152,7 +153,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   
   // Secondary sub-tab states
   const [facebookSubTab, setFacebookSubTab] = useState<'token_validator' | 'wizard' | 'apps' | 'graph_api'>('token_validator');
-  const [webhooksSubTab, setWebhooksSubTab] = useState<'meta_validator' | 'config' | 'logs' | 'signature' | 'subscriptions' | 'retries'>('meta_validator');
+  const [webhooksSubTab, setWebhooksSubTab] = useState<'meta_validator' | 'config' | 'logs' | 'signature' | 'subscriptions' | 'retries' | 'external'>('meta_validator');
   const [systemSubTab, setSystemSubTab] = useState<'database' | 'deploy' | 'rate_limits' | 'audit'>('database');
   const [channelsSubView, setChannelsSubView] = useState<'overview' | 'token_validator'>('overview');
 
@@ -351,6 +352,24 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           <span>Configuração de Webhooks</span>
           <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-blue-100 text-blue-800">
             {webhookSettings?.conversionEndpoints?.length || 0} URLs
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB: WEBHOOKS EXTERNOS & EVENTOS DO INSTAGRAM (MONGODB) */}
+        <button
+          id="tab_settings_external_webhooks"
+          onClick={() => setActiveTab('external_webhooks')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'external_webhooks'
+              ? 'border-purple-600 text-purple-900 bg-purple-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Webhook className="w-4 h-4 text-purple-600" />
+          <span>Webhooks Externos (Instagram)</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-purple-100 to-pink-100 text-purple-900 border border-purple-200/70 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            MongoDB
           </span>
         </button>
 
@@ -895,6 +914,15 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* 1.5 ESSENTIAL TAB: WEBHOOKS EXTERNOS & EVENTOS DO INSTAGRAM (MONGODB)     */}
+      {/* ========================================================================= */}
+      {activeTab === 'external_webhooks' && (
+        <div className="space-y-4">
+          <ExternalMessageWebhooksManager tenantId="tenant_main" />
+        </div>
+      )}
+
       {/* ========================================================= */}
       {/* 2. ESSENTIAL TAB: MONITOR DE LOGS DE WEBHOOK (TEMPO REAL) */}
       {/* ========================================================= */}
@@ -1265,10 +1293,25 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
             >
               Política de Retentativas
             </button>
+            <button
+              onClick={() => setWebhooksSubTab('external')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                webhooksSubTab === 'external'
+                  ? 'bg-purple-600 text-white shadow-xs font-black'
+                  : 'text-purple-700 hover:bg-purple-50'
+              }`}
+            >
+              <Webhook className="w-3.5 h-3.5" />
+              <span>Callbacks Externos (Instagram & MongoDB)</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
           </div>
 
           {webhooksSubTab === 'meta_validator' && (
             <MetaWebhooksValidator />
+          )}
+          {webhooksSubTab === 'external' && (
+            <ExternalMessageWebhooksManager tenantId="tenant_main" />
           )}
           {webhooksSubTab === 'config' && (
             <WebhooksManager

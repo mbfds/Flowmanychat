@@ -1820,6 +1820,8 @@ export type ExternalWebhookAuthType =
   | 'none';
 
 export type ExternalMessageEventType =
+  | 'new_message'
+  | 'comment_mention'
   | 'message.received'
   | 'message.sent'
   | 'message.media_received'
@@ -1830,7 +1832,9 @@ export type ExternalMessageEventType =
   | 'message.postback'
   | 'message.story_reply'
   | 'message.story_mention'
-  | 'message.failed';
+  | 'message.failed'
+  | 'comment.received'
+  | 'comment.replied';
 
 export type ExternalWebhookPlatformPreset =
   | 'custom_rest'

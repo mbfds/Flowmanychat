@@ -268,14 +268,29 @@ export const webhookService = {
     }
   },
 
-  // 13. Test Dispatch / Outbound Webhook Ping
+  // 13. Test Dispatch / Outbound Webhook Ping with HMAC calculation
   async testDispatch(params: {
     endpointUrl: string;
     eventType: string;
     channel: string;
     customPayload?: any;
     customHeaders?: Record<string, string>;
-  }): Promise<{ success: boolean; statusCode: number; durationMs: number; responseBody: string; log: WebhookDeliveryLog }> {
+    secretToken?: string;
+    secretKey?: string;
+    endpointName?: string;
+    timeoutSeconds?: number;
+  }): Promise<{
+    success: boolean;
+    statusCode: number;
+    durationMs: number;
+    responseBody: string;
+    log: WebhookDeliveryLog;
+    requestHeaders?: Record<string, string>;
+    requestPayload?: any;
+    calculatedHmac?: string;
+    hasRealHmac?: boolean;
+    secretProvided?: boolean;
+  }> {
     const response = await fetch('/api/webhooks/test-dispatch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

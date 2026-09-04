@@ -278,8 +278,36 @@ export const INITIAL_LOGS: ExternalWebhookDeliveryEvent[] = [
 ];
 
 export const externalWebhookService = {
-  // Get all endpoints for tenant
+  // Check MongoDB connection status
+  async checkDbStatus(): Promise<{ connected: boolean; source: string }> {
+    try {
+      const res = await fetch('/api/webhooks/external-endpoints?tenantId=tenant_main');
+      if (res.ok) {
+        const data = await res.json();
+        return { connected: !!data.dbConnected, source: data.source || 'mongodb' };
+      }
+      return { connected: false, source: 'memory' };
+    } catch {
+      return { connected: false, source: 'local' };
+    }
+  },
+
+  // Get all endpoints for tenant from MongoDB
   async getEndpoints(tenantId: string = 'tenant_main'): Promise<ExternalMessageWebhookEndpoint[]> {
+    try {
+      const res = await fetch(`/api/webhooks/external-endpoints?tenantId=${tenantId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.endpoints) && data.endpoints.length > 0) {
+          const key = `${STORAGE_KEY_PREFIX}${tenantId}`;
+          localStorage.setItem(key, JSON.stringify(data.endpoints));
+          return data.endpoints;
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch external webhooks from MongoDB, falling back to local cache', err);
+    }
+
     try {
       const key = `${STORAGE_KEY_PREFIX}${tenantId}`;
       const saved = localStorage.getItem(key);
@@ -293,14 +321,33 @@ export const externalWebhookService = {
     }
   },
 
-  // Save or update an endpoint
+  // Save or update an endpoint in MongoDB
   async saveEndpoint(
     endpoint: ExternalMessageWebhookEndpoint,
     tenantId: string = 'tenant_main'
   ): Promise<ExternalMessageWebhookEndpoint[]> {
     const endpoints = await this.getEndpoints(tenantId);
+    const isExisting = endpoints.some((e) => e.id === endpoint.id);
+
+    try {
+      if (isExisting) {
+        await fetch(`/api/webhooks/external-endpoints/${endpoint.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...endpoint, tenantId })
+        });
+      } else {
+        await fetch('/api/webhooks/external-endpoints', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...endpoint, tenantId })
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to persist webhook to MongoDB server, saving locally', err);
+    }
+
     const index = endpoints.findIndex((e) => e.id === endpoint.id);
-    
     let updated: ExternalMessageWebhookEndpoint[];
     if (index >= 0) {
       updated = [...endpoints];
@@ -324,11 +371,19 @@ export const externalWebhookService = {
     return updated;
   },
 
-  // Delete endpoint
+  // Delete endpoint from MongoDB
   async deleteEndpoint(
     id: string,
     tenantId: string = 'tenant_main'
   ): Promise<ExternalMessageWebhookEndpoint[]> {
+    try {
+      await fetch(`/api/webhooks/external-endpoints/${id}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.warn('Failed to delete endpoint from MongoDB, deleting locally', err);
+    }
+
     const endpoints = await this.getEndpoints(tenantId);
     const updated = endpoints.filter((e) => e.id !== id);
     const key = `${STORAGE_KEY_PREFIX}${tenantId}`;
@@ -336,12 +391,22 @@ export const externalWebhookService = {
     return updated;
   },
 
-  // Toggle active state
+  // Toggle active state in MongoDB
   async toggleEndpoint(
     id: string,
     isActive: boolean,
     tenantId: string = 'tenant_main'
   ): Promise<ExternalMessageWebhookEndpoint[]> {
+    try {
+      await fetch(`/api/webhooks/external-endpoints/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive })
+      });
+    } catch (err) {
+      console.warn('Failed to toggle active state in MongoDB', err);
+    }
+
     const endpoints = await this.getEndpoints(tenantId);
     const updated = endpoints.map((e) =>
       e.id === id ? { ...e, isActive, updatedAt: new Date().toISOString() } : e
@@ -388,13 +453,27 @@ export const externalWebhookService = {
     };
 
     switch (eventType) {
+      case 'new_message':
       case 'message.received':
         messageData = {
           ...messageData,
           type: 'text',
           direction: 'inbound',
-          text: 'Olá! Gostaria de saber mais sobre a integração com Webhooks.',
-          hasAttachments: false
+          text: 'Olá! Gostaria de saber mais sobre as automações no Instagram pelo ManyFlow! 🚀',
+          hasAttachments: false,
+          mid: `m_mid_ig_${Date.now()}`
+        };
+        break;
+      case 'comment_mention':
+        messageData = {
+          ...messageData,
+          type: 'mention',
+          direction: 'inbound',
+          text: '@manyflow_oficial Adorei essa automação! Como posso ativar no meu Instagram?',
+          commentId: `cm_ig_${Date.now()}`,
+          mediaId: '17920192837465000',
+          mediaUrl: 'https://instagram.com/p/C9x8y7z6a5b/',
+          mentionType: 'comment'
         };
         break;
       case 'message.sent':
@@ -613,13 +692,17 @@ export const externalWebhookService = {
     });
     let errorMessage: string | undefined = undefined;
 
-    // Try backend proxy dispatcher first
+    // Try backend proxy dispatcher with MongoDB logging first
     try {
-      const proxyRes = await fetch('/api/external-webhooks/dispatch', {
+      const proxyRes = await fetch('/api/webhooks/external-endpoints/test-dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          endpointId: endpoint.id,
+          endpointName: endpoint.name,
           targetUrl: endpoint.targetUrl,
+          eventType,
+          channel: endpoint.channelFilter === 'omnichannel' ? 'instagram' : endpoint.channelFilter,
           authType: endpoint.authType,
           bearerToken: endpoint.bearerToken,
           apiKeyHeaderName: endpoint.apiKeyHeaderName,
@@ -638,6 +721,31 @@ export const externalWebhookService = {
         status = proxyData.success ? 'success' : proxyData.statusCode === 408 ? 'timeout' : 'failed';
         responseBody = proxyData.responseBody || JSON.stringify(proxyData, null, 2);
         errorMessage = proxyData.errorMessage;
+      } else {
+        // Fallback to legacy dispatch endpoint
+        const fallbackRes = await fetch('/api/external-webhooks/dispatch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetUrl: endpoint.targetUrl,
+            authType: endpoint.authType,
+            bearerToken: endpoint.bearerToken,
+            apiKeyHeaderName: endpoint.apiKeyHeaderName,
+            apiKeyValue: endpoint.apiKeyValue,
+            hmacSecret: endpoint.hmacSecret,
+            hmacHeaderName: endpoint.hmacHeaderName,
+            payload,
+            customHeaders: endpoint.customHeaders,
+            timeoutSeconds: endpoint.timeoutSeconds || 10
+          })
+        });
+        if (fallbackRes.ok) {
+          const proxyData = await fallbackRes.json();
+          statusCode = proxyData.statusCode || 200;
+          status = proxyData.success ? 'success' : proxyData.statusCode === 408 ? 'timeout' : 'failed';
+          responseBody = proxyData.responseBody || JSON.stringify(proxyData, null, 2);
+          errorMessage = proxyData.errorMessage;
+        }
       }
     } catch {
       // Fallback to direct / simulated test

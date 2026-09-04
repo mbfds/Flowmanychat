@@ -2034,6 +2034,28 @@ app.post("/api/webhooks/test-dispatch", async (req, res) => {
       }
     }
 
+    const payloadString = typeof samplePayload === "string" ? samplePayload : JSON.stringify(samplePayload);
+
+    // Extract Secret Key / Token de Assinatura for HMAC calculation
+    const secret = req.body.secretToken || req.body.secretKey || (customHeaders && (customHeaders["X-Secret-Token"] || customHeaders["X-ManyFlow-Secret"]));
+    let signatureValue = "sha256=test_signature_mock_live";
+    let hasRealHmac = false;
+    if (secret) {
+      const hmac = crypto.createHmac("sha256", secret.trim()).update(payloadString).digest("hex");
+      signatureValue = `sha256=${hmac}`;
+      hasRealHmac = true;
+    }
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-ManyFlow-Event": eventType || (isConversionEvent ? "lead_generated" : "messages"),
+      "X-ManyFlow-Signature": signatureValue,
+      "X-Hub-Signature-256": signatureValue,
+      "X-Signature-Timestamp": String(Date.now()),
+      "User-Agent": "ManyFlow-Webhook-Dispatcher/2.5.0",
+      ...(customHeaders || {})
+    };
+
     const startTime = Date.now();
     let responseStatus = 200;
     let responseBody = "OK";
@@ -2041,18 +2063,11 @@ app.post("/api/webhooks/test-dispatch", async (req, res) => {
 
     if (endpointUrl && endpointUrl.startsWith("http")) {
       try {
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-          "X-ManyFlow-Event": eventType || (isConversionEvent ? "lead_generated" : "messages"),
-          "X-ManyFlow-Signature": "sha256=test_signature_mock_live",
-          ...(customHeaders || {})
-        };
-
         const timeoutMs = req.body.timeoutSeconds ? req.body.timeoutSeconds * 1000 : 8000;
         const response = await fetch(endpointUrl, {
           method: "POST",
           headers,
-          body: JSON.stringify(samplePayload),
+          body: payloadString,
           signal: AbortSignal.timeout(timeoutMs),
         });
         responseStatus = response.status;
@@ -2070,7 +2085,7 @@ app.post("/api/webhooks/test-dispatch", async (req, res) => {
     const logDoc = {
       id: `log_${Date.now()}`,
       endpointUrl,
-      endpointName: "Endpoint de Teste",
+      endpointName: req.body.endpointName || "Endpoint de Teste",
       method: "POST",
       channel: channel || "instagram",
       event: eventType || "messages",
@@ -2079,12 +2094,7 @@ app.post("/api/webhooks/test-dispatch", async (req, res) => {
       durationMs: duration,
       timestamp: new Date().toISOString(),
       success: isSuccess,
-      requestHeaders: {
-        "Content-Type": "application/json",
-        "X-ManyFlow-Event": eventType || "messages",
-        "X-ManyFlow-Signature": "sha256=3a890fb12c894e772091ea0281b67f10e4a90",
-        "User-Agent": "ManyFlow-Webhook-Dispatcher/2.1.0"
-      },
+      requestHeaders: headers,
       responseHeaders: {
         "content-type": "application/json; charset=utf-8",
         "server": "nginx/1.24.0"
@@ -2104,6 +2114,489 @@ app.post("/api/webhooks/test-dispatch", async (req, res) => {
       durationMs: duration,
       responseBody,
       log: logDoc,
+      requestHeaders: headers,
+      requestPayload: samplePayload,
+      calculatedHmac: signatureValue,
+      hasRealHmac,
+      secretProvided: Boolean(secret),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =========================================================================
+// --- MONGODB REST ENDPOINTS: EXTERNAL WEBHOOKS (INSTAGRAM EVENTS) ---
+// =========================================================================
+
+// In-memory fallback cache for external webhooks
+let inMemoryExternalEndpoints: any[] = [
+  {
+    id: "ewh_ig_new_messages",
+    name: "Instagram Direct - n8n Hub (Novas Mensagens)",
+    description: "Recebe todas as novas mensagens diretas (DM) do Instagram em tempo real para processamento automatizado.",
+    targetUrl: "https://n8n.webhook.site/v1/instagram/direct-messages",
+    platform: "n8n",
+    channelFilter: "instagram",
+    events: ["new_message", "message.received", "message.media_received"],
+    isActive: true,
+    authType: "bearer",
+    bearerToken: "mf_ig_sec_live_998127394872",
+    apiKeyHeaderName: "X-API-Key",
+    apiKeyValue: "",
+    hmacSecret: "",
+    hmacHeaderName: "X-Hub-Signature-256",
+    verifyToken: "manyflow_verify_token_ig_msg",
+    payloadFormat: "n8n_structured",
+    includeContactMetadata: true,
+    includeCustomFields: true,
+    includeRawPayload: false,
+    timeoutSeconds: 10,
+    maxRetries: 3,
+    stats: {
+      totalSent: 1240,
+      successCount: 1232,
+      failedCount: 8,
+      lastLatencyMs: 65,
+      lastStatusCode: 200,
+      lastDispatchedAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    },
+    tenantId: "tenant_main",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+  },
+  {
+    id: "ewh_ig_comment_mentions",
+    name: "Instagram Menções & Comentários - CRM Callback",
+    description: "Recebe menções de perfil em comentários de posts e stories do Instagram com validação criptográfica HMAC SHA-256.",
+    targetUrl: "https://api.crm-enterprise.com.br/webhooks/instagram/mentions",
+    platform: "custom_rest",
+    channelFilter: "instagram",
+    events: ["comment_mention", "comment.received", "message.story_mention"],
+    isActive: true,
+    authType: "hmac_sha256",
+    bearerToken: "",
+    apiKeyHeaderName: "X-API-Key",
+    apiKeyValue: "",
+    hmacSecret: "whsec_ig_77a9c8f0e1b2345d6e7f8a9b",
+    hmacHeaderName: "X-Hub-Signature-256",
+    verifyToken: "manyflow_verify_token_ig_mentions",
+    payloadFormat: "standard_json",
+    includeContactMetadata: true,
+    includeCustomFields: true,
+    includeRawPayload: false,
+    timeoutSeconds: 8,
+    maxRetries: 3,
+    stats: {
+      totalSent: 680,
+      successCount: 676,
+      failedCount: 4,
+      lastLatencyMs: 92,
+      lastStatusCode: 200,
+      lastDispatchedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    },
+    tenantId: "tenant_main",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+  },
+  {
+    id: "ewh_ig_typebot_flow",
+    name: "Instagram Chat Interativo - Typebot Gateway",
+    description: "Encaminha novas interações do Instagram Direct para fluxos conversacionais inteligentes no Typebot.",
+    targetUrl: "https://typebot.io/api/v1/typebots/instagram_support/webhook",
+    platform: "typebot",
+    channelFilter: "instagram",
+    events: ["new_message", "message.reaction", "message.postback"],
+    isActive: true,
+    authType: "api_key",
+    bearerToken: "",
+    apiKeyHeaderName: "X-Typebot-Token",
+    apiKeyValue: "tb_ig_sec_491823901",
+    hmacSecret: "",
+    hmacHeaderName: "X-Hub-Signature-256",
+    verifyToken: "manyflow_verify_token_ig_tb",
+    payloadFormat: "typebot",
+    includeContactMetadata: true,
+    includeCustomFields: true,
+    includeRawPayload: false,
+    timeoutSeconds: 12,
+    maxRetries: 4,
+    stats: {
+      totalSent: 430,
+      successCount: 425,
+      failedCount: 5,
+      lastLatencyMs: 110,
+      lastStatusCode: 200,
+      lastDispatchedAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+    },
+    tenantId: "tenant_main",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+  }
+];
+
+// 1. GET /api/webhooks/external-endpoints - List all endpoints from MongoDB
+app.get("/api/webhooks/external-endpoints", async (req, res) => {
+  try {
+    const { tenantId = "tenant_main", channel, event } = req.query;
+    const db = await getDb();
+
+    if (!db) {
+      let filtered = [...inMemoryExternalEndpoints];
+      if (channel && channel !== "all") {
+        filtered = filtered.filter(e => e.channelFilter === channel || e.channelFilter === "omnichannel");
+      }
+      if (event && event !== "all") {
+        filtered = filtered.filter(e => e.events?.includes(event));
+      }
+      return res.json({
+        success: true,
+        source: "memory",
+        endpoints: filtered,
+        dbConnected: false,
+        total: filtered.length,
+      });
+    }
+
+    const col = db.collection("external_webhooks");
+    const count = await col.countDocuments();
+    if (count === 0) {
+      // Auto-seed initial endpoints into MongoDB
+      await col.insertMany(inMemoryExternalEndpoints);
+    }
+
+    const filter: any = {};
+    if (tenantId) filter.tenantId = tenantId;
+    if (channel && channel !== "all") {
+      filter.$or = [{ channelFilter: channel }, { channelFilter: "omnichannel" }];
+    }
+    if (event && event !== "all") {
+      filter.events = event;
+    }
+
+    const endpoints = await col.find(filter).sort({ createdAt: -1 }).toArray();
+
+    res.json({
+      success: true,
+      source: "mongodb",
+      endpoints,
+      dbConnected: true,
+      total: endpoints.length,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. POST /api/webhooks/external-endpoints - Create endpoint in MongoDB
+app.post("/api/webhooks/external-endpoints", async (req, res) => {
+  try {
+    const data = req.body;
+    if (!data.name || !data.targetUrl) {
+      return res.status(400).json({ success: false, error: "Nome e URL de destino são obrigatórios." });
+    }
+
+    const newEndpoint = {
+      id: data.id || `ewh_ig_${Date.now()}`,
+      name: data.name.trim(),
+      description: data.description || "",
+      targetUrl: data.targetUrl.trim(),
+      platform: data.platform || "custom_rest",
+      channelFilter: data.channelFilter || "instagram",
+      events: Array.isArray(data.events) && data.events.length > 0 ? data.events : ["new_message", "comment_mention"],
+      isActive: data.isActive !== false,
+      authType: data.authType || "none",
+      bearerToken: data.bearerToken || "",
+      apiKeyHeaderName: data.apiKeyHeaderName || "X-API-Key",
+      apiKeyValue: data.apiKeyValue || "",
+      hmacSecret: data.hmacSecret || "",
+      hmacHeaderName: data.hmacHeaderName || "X-Hub-Signature-256",
+      basicUsername: data.basicUsername || "",
+      basicPassword: data.basicPassword || "",
+      verifyToken: data.verifyToken || `verify_tok_${Date.now()}`,
+      payloadFormat: data.payloadFormat || "standard_json",
+      includeContactMetadata: data.includeContactMetadata !== false,
+      includeCustomFields: data.includeCustomFields !== false,
+      includeRawPayload: data.includeRawPayload || false,
+      timeoutSeconds: Number(data.timeoutSeconds) || 10,
+      maxRetries: Number(data.maxRetries) || 3,
+      retryPolicy: data.retryPolicy || {
+        maxRetries: 3,
+        backoffStrategy: "exponential",
+        initialIntervalMs: 1000,
+        maxIntervalMs: 30000,
+        backoffMultiplier: 2,
+      },
+      stats: data.stats || {
+        totalSent: 0,
+        successCount: 0,
+        failedCount: 0,
+        lastLatencyMs: 0,
+        lastStatusCode: 0,
+        lastDispatchedAt: null,
+      },
+      tenantId: data.tenantId || "tenant_main",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const db = await getDb();
+    if (!db) {
+      inMemoryExternalEndpoints.unshift(newEndpoint);
+      return res.json({ success: true, source: "memory", endpoint: newEndpoint });
+    }
+
+    await db.collection("external_webhooks").insertOne(newEndpoint);
+
+    // Also log system event in MongoDB
+    try {
+      await db.collection("system_logs").insertOne({
+        action: "create_external_webhook",
+        details: `Endpoint externo '${newEndpoint.name}' criado para eventos do Instagram.`,
+        endpointId: newEndpoint.id,
+        targetUrl: newEndpoint.targetUrl,
+        createdAt: new Date(),
+      });
+    } catch {}
+
+    res.json({ success: true, source: "mongodb", endpoint: newEndpoint });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. PUT /api/webhooks/external-endpoints/:id - Update endpoint in MongoDB
+app.put("/api/webhooks/external-endpoints/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = { ...req.body, updatedAt: new Date().toISOString() };
+    delete updates._id; // prevent immutable field error
+
+    const db = await getDb();
+    if (!db) {
+      const idx = inMemoryExternalEndpoints.findIndex(e => e.id === id);
+      if (idx >= 0) {
+        inMemoryExternalEndpoints[idx] = { ...inMemoryExternalEndpoints[idx], ...updates };
+        return res.json({ success: true, source: "memory", endpoint: inMemoryExternalEndpoints[idx] });
+      }
+      return res.status(404).json({ success: false, error: "Endpoint não encontrado na memória." });
+    }
+
+    const col = db.collection("external_webhooks");
+    await col.updateOne({ id }, { $set: updates }, { upsert: true });
+    const updated = await col.findOne({ id });
+
+    res.json({ success: true, source: "mongodb", endpoint: updated });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. DELETE /api/webhooks/external-endpoints/:id - Delete endpoint from MongoDB
+app.delete("/api/webhooks/external-endpoints/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = await getDb();
+
+    if (!db) {
+      inMemoryExternalEndpoints = inMemoryExternalEndpoints.filter(e => e.id !== id);
+      return res.json({ success: true, source: "memory", deletedId: id });
+    }
+
+    await db.collection("external_webhooks").deleteOne({ id });
+    res.json({ success: true, source: "mongodb", deletedId: id });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5. POST /api/webhooks/external-endpoints/test-dispatch - Test real HTTP dispatch to external URL
+app.post("/api/webhooks/external-endpoints/test-dispatch", async (req, res) => {
+  try {
+    const {
+      endpointId,
+      endpointName,
+      targetUrl,
+      eventType = "new_message",
+      channel = "instagram",
+      authType = "none",
+      bearerToken,
+      apiKeyHeaderName = "X-API-Key",
+      apiKeyValue,
+      hmacSecret,
+      hmacHeaderName = "X-Hub-Signature-256",
+      customPayload,
+      customText,
+      timeoutSeconds = 10,
+    } = req.body;
+
+    if (!targetUrl || !targetUrl.startsWith("http")) {
+      return res.status(400).json({ success: false, error: "URL de destino inválida." });
+    }
+
+    // Build authentic Instagram event payload
+    let payload = customPayload;
+    if (!payload) {
+      if (eventType === "comment_mention") {
+        payload = {
+          object: "instagram",
+          entry: [
+            {
+              id: "17841400000000000",
+              time: Math.floor(Date.now() / 1000),
+              changes: [
+                {
+                  field: "mentions",
+                  value: {
+                    comment_id: `cm_ig_${Date.now()}`,
+                    media_id: "17920192837465000",
+                    text: customText || "@manyflow_oficial Adorei essa automação! Como integro com meu CRM?",
+                    from: {
+                      id: "ig_user_4491823901",
+                      username: "mariana_souza_style",
+                    },
+                    media_url: "https://instagram.com/p/C9x8y7z6a5b/",
+                  },
+                },
+              ],
+            },
+          ],
+          event_type: "comment_mention",
+          channel: "instagram",
+          dispatched_at: new Date().toISOString(),
+        };
+      } else {
+        // Default: new_message / Direct Message
+        payload = {
+          object: "instagram",
+          entry: [
+            {
+              id: "17841400000000000",
+              time: Math.floor(Date.now() / 1000),
+              messaging: [
+                {
+                  sender: {
+                    id: "ig_user_4491823901",
+                    username: "mariana_souza_style",
+                  },
+                  recipient: {
+                    id: "17841400000000000",
+                    name: "ManyFlow Oficial",
+                  },
+                  timestamp: Date.now(),
+                  message: {
+                    mid: `m_mid_ig_${Date.now()}`,
+                    text: customText || "Olá! Gostaria de saber mais sobre o atendimento automatizado no Instagram! 🚀",
+                  },
+                },
+              ],
+            },
+          ],
+          event_type: "new_message",
+          channel: "instagram",
+          dispatched_at: new Date().toISOString(),
+        };
+      }
+    }
+
+    const payloadString = typeof payload === "string" ? payload : JSON.stringify(payload);
+
+    // Build headers with authentication
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "X-ManyFlow-Event": eventType,
+      "X-ManyFlow-Channel": channel,
+      "X-ManyFlow-Delivery-Id": `deliv_${Date.now()}`,
+      "User-Agent": "ManyFlow-Instagram-Webhook-Dispatcher/2.5.0",
+    };
+
+    if (authType === "bearer" && bearerToken) {
+      headers["Authorization"] = `Bearer ${bearerToken.trim()}`;
+    } else if (authType === "api_key" && apiKeyValue) {
+      headers[apiKeyHeaderName || "X-API-Key"] = apiKeyValue.trim();
+    } else if (authType === "hmac_sha256" && hmacSecret) {
+      const hmac = crypto.createHmac("sha256", hmacSecret.trim()).update(payloadString).digest("hex");
+      headers[hmacHeaderName || "X-Hub-Signature-256"] = `sha256=${hmac}`;
+    }
+
+    const startTime = Date.now();
+    let responseStatus = 200;
+    let responseBody = "OK";
+    let isSuccess = true;
+    let errorMessage = "";
+
+    try {
+      const response = await fetch(targetUrl, {
+        method: "POST",
+        headers,
+        body: payloadString,
+        signal: AbortSignal.timeout(Number(timeoutSeconds) * 1000),
+      });
+
+      responseStatus = response.status;
+      isSuccess = response.ok;
+      const text = await response.text();
+      responseBody = text ? text.substring(0, 5000) : "Vazio";
+    } catch (fetchErr: any) {
+      isSuccess = false;
+      responseStatus = fetchErr.name === "TimeoutError" ? 504 : 502;
+      responseBody = fetchErr.message || "Erro de conexão ao endpoint de destino";
+      errorMessage = fetchErr.message;
+    }
+
+    const durationMs = Date.now() - startTime;
+
+    // Save Delivery Log in MongoDB collection
+    const logEntry = {
+      id: `log_ewh_${Date.now()}`,
+      endpointId: endpointId || "manual_test",
+      endpointName: endpointName || "Teste Manual de Endpoint",
+      event: eventType,
+      channel,
+      targetUrl,
+      statusCode: responseStatus,
+      durationMs,
+      status: isSuccess ? "success" : "failed",
+      errorMessage: errorMessage || undefined,
+      requestPayload: payload,
+      requestHeaders: headers,
+      responseBody,
+      attempts: 1,
+      createdAt: new Date().toISOString(),
+    };
+
+    const db = await getDb();
+    if (db) {
+      await db.collection("webhook_logs").insertOne(logEntry);
+
+      // Update endpoint stats in MongoDB if endpointId is provided
+      if (endpointId && endpointId !== "manual_test") {
+        await db.collection("external_webhooks").updateOne(
+          { id: endpointId },
+          {
+            $inc: {
+              "stats.totalSent": 1,
+              ...(isSuccess ? { "stats.successCount": 1 } : { "stats.failedCount": 1 }),
+            },
+            $set: {
+              "stats.lastLatencyMs": durationMs,
+              "stats.lastStatusCode": responseStatus,
+              "stats.lastDispatchedAt": new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          }
+        );
+      }
+    }
+
+    res.json({
+      success: isSuccess,
+      statusCode: responseStatus,
+      durationMs,
+      requestPayload: payload,
+      requestHeaders: headers,
+      responseBody,
+      log: logEntry,
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });

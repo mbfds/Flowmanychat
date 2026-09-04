@@ -5,6 +5,7 @@ import { ComponentLoader } from './components/Common/ComponentLoader';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { dbService } from './services/db';
+import { flowLogger } from './utils/flowLogger';
 
 // Lazy-loaded heavy tab modules and modals for optimized bundle splitting & faster initial load
 const FlowCanvas = lazy(() =>
@@ -121,6 +122,10 @@ function MainApp() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isZenMode, setIsZenMode] = useState(false);
+  const [isDbSyncing, setIsDbSyncing] = useState(false);
+  const [dbSyncProgress, setDbSyncProgress] = useState(0);
+  const [dbSyncStatus, setDbSyncStatus] = useState('Conectando ao MongoDB...');
+  const [dbSyncPromise, setDbSyncPromise] = useState<Promise<any> | null>(null);
 
   // Sync with MongoDB Service on Mount / Auth state change
   useEffect(() => {
@@ -132,15 +137,28 @@ function MainApp() {
         setTriggers(DEMO_TRIGGERS);
         setContacts(DEMO_CONTACTS);
         setConversations(DEMO_CONVERSATIONS);
+        setIsDbSyncing(false);
+        setDbSyncProgress(100);
         return;
       }
 
-      // Authenticated real user: fetch strictly real data from database
+      // Authenticated real user: fetch strictly real data from database with retry & real progress
+      setIsDbSyncing(true);
+      setDbSyncProgress(5);
+      setDbSyncStatus('Iniciando sincronização com MongoDB...');
+
+      const syncPromise = dbService.syncInitialDataWithRetry({
+        onProgress: (progress, statusMessage) => {
+          setDbSyncProgress(progress);
+          setDbSyncStatus(statusMessage);
+        },
+        maxRetries: 3
+      });
+
+      setDbSyncPromise(syncPromise);
+
       try {
-        const [remoteFlows, remoteContacts] = await Promise.all([
-          dbService.getFlows(),
-          dbService.getContacts(),
-        ]);
+        const { flows: remoteFlows, contacts: remoteContacts } = await syncPromise;
 
         if (remoteFlows && remoteFlows.length > 0) {
           setFlows(remoteFlows);
@@ -158,7 +176,12 @@ function MainApp() {
           setContacts([]);
         }
       } catch (err) {
-        console.warn('[App] MongoDB initialization check:', err);
+        console.warn('[App] Erro na sincronização inicial do MongoDB:', err);
+      } finally {
+        setDbSyncProgress(100);
+        setTimeout(() => {
+          setIsDbSyncing(false);
+        }, 350);
       }
     }
 
@@ -178,10 +201,23 @@ function MainApp() {
   const activeFlow = flows.find((f) => f.id === selectedFlowId) || flows[0];
 
   const handleUpdateFlow = (updatedFlow: Flow) => {
-    setFlows((prev) => prev.map((f) => (f.id === updatedFlow.id ? updatedFlow : f)));
-    dbService.updateFlow(updatedFlow.id, updatedFlow).catch((err) => {
-      console.warn('[App] Erro ao sincronizar fluxo no MongoDB:', err);
+    const startTime = Date.now();
+    
+    // Log flow modification to console for production debugging
+    flowLogger.logUpdate(updatedFlow.id, updatedFlow, {
+      previousTitle: flows.find((f) => f.id === updatedFlow.id)?.title,
+      nodesDelta: (updatedFlow.nodes?.length || 0) - (flows.find((f) => f.id === updatedFlow.id)?.nodes?.length || 0),
     });
+
+    setFlows((prev) => prev.map((f) => (f.id === updatedFlow.id ? updatedFlow : f)));
+    dbService.updateFlow(updatedFlow.id, updatedFlow)
+      .then((success) => {
+        flowLogger.logSyncResult(updatedFlow.id, 'update', success, undefined, Date.now() - startTime);
+      })
+      .catch((err) => {
+        console.warn('[App] Erro ao sincronizar fluxo no MongoDB:', err);
+        flowLogger.logSyncResult(updatedFlow.id, 'update', false, err, Date.now() - startTime);
+      });
   };
 
   const handleImportFlow = (importedFlow: Flow, asNewFlow: boolean = true) => {
@@ -193,6 +229,7 @@ function MainApp() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
+      flowLogger.logCreate(newFlowId, newFlow, { source: 'import_flow' });
       setFlows((prev) => [newFlow, ...prev]);
       setSelectedFlowId(newFlowId);
       dbService.saveFlowsBulk([newFlow]).catch((err) => {
@@ -208,6 +245,7 @@ function MainApp() {
   };
 
   const handleCreateNewFlow = () => {
+    const startTime = Date.now();
     const newFlowId = `flow_${Date.now()}`;
     const newFlow: Flow = {
       id: newFlowId,
@@ -253,13 +291,24 @@ function MainApp() {
       stats: { runs: 0, completed: 0, ctr: 0 }
     };
 
+    // Log new flow creation to console for production debugging
+    flowLogger.logCreate(newFlowId, newFlow, {
+      channel: newFlow.channel,
+      initialNodesCount: newFlow.nodes.length
+    });
+
     setFlows((prev) => [newFlow, ...prev]);
     setSelectedFlowId(newFlowId);
     setCurrentTab('flows');
 
-    dbService.createFlow(newFlow).catch((err) => {
-      console.warn('[App] Erro ao salvar novo fluxo no MongoDB:', err);
-    });
+    dbService.createFlow(newFlow)
+      .then((created) => {
+        flowLogger.logSyncResult(newFlowId, 'create', Boolean(created), undefined, Date.now() - startTime);
+      })
+      .catch((err) => {
+        console.warn('[App] Erro ao salvar novo fluxo no MongoDB:', err);
+        flowLogger.logSyncResult(newFlowId, 'create', false, err, Date.now() - startTime);
+      });
   };
 
   const handleFlowGenerated = (newFlow: Flow) => {
@@ -438,25 +487,35 @@ function MainApp() {
 
         {/* Tab View Routing */}
         <main className="flex-1 flex overflow-hidden bg-[#F8F9FB]">
-          <Suspense fallback={
+          {isDbSyncing ? (
             <ComponentLoader 
               variant={currentTab as any} 
-              label={`Carregando ${
-                currentTab === 'flows' ? 'Editor Visual de Fluxos' : 
-                currentTab === 'analytics' ? 'Painel de Métricas & Funis' : 
-                currentTab === 'inbox' ? 'Atendimento ao Vivo (Inbox)' : 
-                currentTab === 'contacts' ? 'Gestão de Contatos & CRM' : 
-                currentTab === 'triggers' ? 'Gatilhos de Palavras-Chave' : 
-                currentTab === 'appointments' ? 'Central de Agendamentos Omnichannel' :
-                currentTab === 'comment_tools' ? 'Automações de Comentários' :
-                currentTab === 'broadcast' ? 'Campanhas de Disparo em Massa' : 
-                currentTab === 'admin_users' ? 'Gestão de Usuários (Admin)' :
-                currentTab === 'admin_subscriptions' ? 'Gestão de Mensalidades & Faturas' :
-                currentTab === 'admin_packages' ? 'Gestão de Planos & Pacotes' :
-                'Central de Configurações'
-              }...`} 
+              label="Sincronização com Banco de Dados MongoDB"
+              statusMessage={dbSyncStatus}
+              progress={dbSyncProgress}
+              showProgressBar={true}
+              promise={dbSyncPromise}
             />
-          }>
+          ) : (
+            <Suspense fallback={
+              <ComponentLoader 
+                variant={currentTab as any} 
+                label={`Carregando ${
+                  currentTab === 'flows' ? 'Editor Visual de Fluxos' : 
+                  currentTab === 'analytics' ? 'Painel de Métricas & Funis' : 
+                  currentTab === 'inbox' ? 'Atendimento ao Vivo (Inbox)' : 
+                  currentTab === 'contacts' ? 'Gestão de Contatos & CRM' : 
+                  currentTab === 'triggers' ? 'Gatilhos de Palavras-Chave' : 
+                  currentTab === 'appointments' ? 'Central de Agendamentos Omnichannel' :
+                  currentTab === 'comment_tools' ? 'Automações de Comentários' :
+                  currentTab === 'broadcast' ? 'Campanhas de Disparo em Massa' : 
+                  currentTab === 'admin_users' ? 'Gestão de Usuários (Admin)' :
+                  currentTab === 'admin_subscriptions' ? 'Gestão de Mensalidades & Faturas' :
+                  currentTab === 'admin_packages' ? 'Gestão de Planos & Pacotes' :
+                  'Central de Configurações'
+                }...`} 
+              />
+            }>
             {currentTab === 'flows' && (
               <FlowCanvas
                 flow={activeFlow}
@@ -612,6 +671,7 @@ function MainApp() {
               />
             )}
           </Suspense>
+          )}
         </main>
       </div>
 

@@ -37,7 +37,12 @@ import {
   Repeat,
   Timer,
   Gauge,
-  AlertTriangle
+  AlertTriangle,
+  Eye,
+  EyeOff,
+  Terminal,
+  Code,
+  Shield
 } from 'lucide-react';
 import { 
   WebhookSettingsState, 
@@ -45,6 +50,10 @@ import {
   ConversionEventType 
 } from '../../types';
 import { webhookService } from '../../services/webhookService';
+import { 
+  WebhookResponseInspectorModal, 
+  WebhookResponseInspectorData 
+} from './WebhookResponseInspectorModal';
 
 interface WebhookConfigManagerProps {
   settings: WebhookSettingsState;
@@ -195,11 +204,37 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
   const [testingEndpointId, setTestingEndpointId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{
     endpointId: string;
+    endpointName?: string;
+    endpointUrl?: string;
     success: boolean;
     statusCode: number;
     durationMs: number;
     responseBody: string;
     payloadSent: any;
+    requestHeaders?: Record<string, string>;
+    calculatedHmac?: string;
+    hasRealHmac?: boolean;
+    secretProvided?: boolean;
+  } | null>(null);
+
+  // Inspector Modal State
+  const [isInspectorModalOpen, setIsInspectorModalOpen] = useState(false);
+  const [inspectorData, setInspectorData] = useState<WebhookResponseInspectorData | null>(null);
+
+  // Card & Modal Secret Visibility States
+  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
+  const [showSecretToken, setShowSecretToken] = useState(false);
+
+  // Modal In-Form Test State
+  const [modalTesting, setModalTesting] = useState(false);
+  const [modalTestFeedback, setModalTestFeedback] = useState<{
+    success: boolean;
+    statusCode: number;
+    durationMs: number;
+    responseBody: string;
+    calculatedHmac?: string;
+    payloadSent?: any;
+    headersSent?: Record<string, string>;
   } | null>(null);
 
   // Documentation sample selector
@@ -456,9 +491,6 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
         if (h.key && h.value) headersMap[h.key] = h.value;
       });
     }
-    if (endpoint.secretToken) {
-      headersMap['X-ManyFlow-Signature'] = `sha256=${endpoint.secretToken}`;
-    }
 
     try {
       const res = await webhookService.testDispatch({
@@ -466,17 +498,29 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
         eventType: eventToTest,
         channel: 'instagram',
         customPayload: sampleConversionPayload,
-        customHeaders: headersMap
+        customHeaders: headersMap,
+        secretToken: endpoint.secretToken || '',
+        endpointName: endpoint.name,
+        timeoutSeconds: endpoint.timeoutSeconds || 10
       });
 
-      setTestResult({
+      const fullResult = {
         endpointId: endpoint.id,
+        endpointName: endpoint.name,
+        endpointUrl: endpoint.url,
         success: res.success,
         statusCode: res.statusCode,
         durationMs: res.durationMs,
         responseBody: res.responseBody,
-        payloadSent: sampleConversionPayload
-      });
+        payloadSent: sampleConversionPayload,
+        requestHeaders: res.requestHeaders || headersMap,
+        calculatedHmac: res.calculatedHmac,
+        hasRealHmac: res.hasRealHmac,
+        secretProvided: res.secretProvided || Boolean(endpoint.secretToken)
+      };
+
+      setTestResult(fullResult);
+      setInspectorData(fullResult);
 
       // Update delivery stats on the endpoint
       const updated = conversionEndpoints.map((ep) => {
@@ -495,16 +539,110 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
 
       persistSettings({ ...settings, conversionEndpoints: updated });
     } catch (err: any) {
-      setTestResult({
+      const errorResult = {
         endpointId: endpoint.id,
+        endpointName: endpoint.name,
+        endpointUrl: endpoint.url,
         success: false,
         statusCode: 502,
         durationMs: 0,
-        responseBody: err.message,
-        payloadSent: sampleConversionPayload
-      });
+        responseBody: err.message || 'Falha de conexão com o endpoint externo.',
+        payloadSent: sampleConversionPayload,
+        requestHeaders: headersMap,
+      };
+      setTestResult(errorResult);
+      setInspectorData(errorResult);
     } finally {
       setTestingEndpointId(null);
+    }
+  };
+
+  const handleModalTestDispatch = async () => {
+    if (!url || !url.startsWith('http')) {
+      alert('Por favor, informe uma URL válida antes de testar a conexão.');
+      return;
+    }
+    setModalTesting(true);
+    setModalTestFeedback(null);
+    try {
+      const eventToTest = selectedEvents[0] || 'lead_generated';
+      const samplePayload = {
+        event: eventToTest,
+        event_id: `evt_test_modal_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        app: 'ManyFlow',
+        source: 'instagram',
+        data: {
+          contact: {
+            id: 'ct_test_lead_9901',
+            name: 'Mariana Souza',
+            username: 'mariana.souza',
+            channel: 'instagram',
+            email: 'mariana.souza@empresa.com.br',
+            phone: '+5511987654321',
+            status: 'active'
+          },
+          conversion: {
+            type: eventToTest,
+            value: 297.00,
+            currency: 'BRL',
+            flow_id: 'flow_teste_modal',
+            flow_title: 'Teste de Integração de Webhook'
+          }
+        }
+      };
+
+      const customHeaders: Record<string, string> = {};
+      headersList.forEach((h) => {
+        if (h.key && h.value) customHeaders[h.key] = h.value;
+      });
+
+      const res = await webhookService.testDispatch({
+        endpointUrl: url.trim(),
+        eventType: eventToTest,
+        channel: 'instagram',
+        customPayload: samplePayload,
+        customHeaders,
+        secretToken: secretToken.trim(),
+        endpointName: name.trim() || 'Teste em Modal',
+        timeoutSeconds: timeoutSeconds || 10
+      });
+
+      const feedbackData = {
+        success: res.success,
+        statusCode: res.statusCode,
+        durationMs: res.durationMs,
+        responseBody: res.responseBody,
+        calculatedHmac: res.calculatedHmac,
+        payloadSent: samplePayload,
+        headersSent: res.requestHeaders || customHeaders
+      };
+
+      setModalTestFeedback(feedbackData);
+
+      // Pre-populate inspector data in case user clicks to inspect
+      setInspectorData({
+        endpointName: name.trim() || 'Endpoint em Configuração',
+        endpointUrl: url.trim(),
+        success: res.success,
+        statusCode: res.statusCode,
+        durationMs: res.durationMs,
+        responseBody: res.responseBody,
+        payloadSent: samplePayload,
+        requestHeaders: res.requestHeaders || customHeaders,
+        calculatedHmac: res.calculatedHmac,
+        hasRealHmac: res.hasRealHmac,
+        secretProvided: Boolean(secretToken.trim())
+      });
+    } catch (err: any) {
+      setModalTestFeedback({
+        success: false,
+        statusCode: 502,
+        durationMs: 0,
+        responseBody: err.message || 'Erro ao conectar ao endpoint.',
+      });
+    } finally {
+      setModalTesting(false);
     }
   };
 
@@ -722,21 +860,23 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
                           {ep.isActive ? 'Pausar' : 'Ativar'}
                         </button>
 
-                        {/* Test Dispatch Button */}
+                        {/* Testar Conexão Button */}
                         <button
+                          id={`btn_test_conn_${ep.id}`}
                           onClick={() => handleTestDispatch(ep)}
                           disabled={isTesting}
-                          className="px-3 py-1 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white rounded-md text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Enviar payload de teste e inspecionar resposta do servidor"
+                          className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs hover:shadow cursor-pointer"
                         >
                           {isTesting ? (
                             <>
-                              <RefreshCw className="w-3 h-3 animate-spin" />
-                              <span>Disparando...</span>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Testando Conexão...</span>
                             </>
                           ) : (
                             <>
-                              <Play className="w-3 h-3 text-emerald-400" />
-                              <span>Testar Envio</span>
+                              <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                              <span>Testar Conexão</span>
                             </>
                           )}
                         </button>
@@ -779,6 +919,53 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
                               <Copy className="w-3.5 h-3.5" />
                             )}
                           </button>
+                        </div>
+                      </div>
+
+                      {/* Secret Key / Token de Assinatura HMAC Display */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 font-semibold shrink-0">Secret Key / HMAC:</span>
+                        <div className="flex-1 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-mono text-[11px] text-slate-800 flex items-center justify-between overflow-x-auto">
+                          {ep.secretToken ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-purple-700 font-bold">
+                                {revealedSecrets[ep.id] ? ep.secretToken : `••••••••••••••••${ep.secretToken.slice(-4)}`}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-sans font-bold flex items-center gap-1">
+                                <Shield className="w-3 h-3 text-purple-600" />
+                                HMAC SHA-256 Ativo
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 italic">Nenhum token de assinatura definido</span>
+                          )}
+
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            {ep.secretToken && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setRevealedSecrets((prev) => ({ ...prev, [ep.id]: !prev[ep.id] }))}
+                                  className="text-gray-400 hover:text-gray-700 p-1 cursor-pointer"
+                                  title={revealedSecrets[ep.id] ? 'Ocultar Secret' : 'Revelar Secret'}
+                                >
+                                  {revealedSecrets[ep.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopy(ep.secretToken || '', `sec_${ep.id}`)}
+                                  className="text-gray-400 hover:text-gray-700 p-1 cursor-pointer"
+                                  title="Copiar Secret Key"
+                                >
+                                  {copiedKey === `sec_${ep.id}` ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -844,26 +1031,47 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
 
                       {/* Live Test Results Box */}
                       {result && (
-                        <div className={`p-3 rounded-lg border text-xs space-y-1.5 ${
+                        <div className={`p-3.5 rounded-xl border text-xs space-y-2.5 ${
                           result.success 
-                            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950' 
-                            : 'bg-rose-50/80 border-rose-200 text-rose-950'
+                            ? 'bg-emerald-50/90 border-emerald-300 text-emerald-950 shadow-xs' 
+                            : 'bg-rose-50/90 border-rose-300 text-rose-950 shadow-xs'
                         }`}>
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold flex items-center gap-1.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
                               {result.success ? (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                               ) : (
-                                <XCircle className="w-4 h-4 text-rose-600" />
+                                <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
                               )}
-                              <span>Resultado do Disparo de Teste: {result.statusCode}</span>
-                            </span>
-                            <span className="font-mono text-[10px] text-gray-500">
-                              Latência: {result.durationMs}ms
-                            </span>
+                              <span className="font-bold">
+                                Conexão Testada: HTTP {result.statusCode} {result.success ? 'OK' : 'Falha'}
+                              </span>
+                              <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-white/80 border border-gray-200 text-gray-700">
+                                ⏱️ {result.durationMs}ms
+                              </span>
+                              {result.hasRealHmac && (
+                                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold flex items-center gap-1 border border-blue-200">
+                                  <Shield className="w-3 h-3 text-blue-600" />
+                                  HMAC Verificado
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                setInspectorData(result as any);
+                                setIsInspectorModalOpen(true);
+                              }}
+                              className="px-3 py-1 bg-white hover:bg-gray-50 text-gray-800 rounded-lg text-xs font-bold border border-gray-300 shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+                            >
+                              <Terminal className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Inspecionar Resposta Completa & Headers HMAC</span>
+                            </button>
                           </div>
-                          <div className="bg-white/90 p-2 rounded border border-gray-200 font-mono text-[10px] max-h-24 overflow-y-auto text-gray-800">
-                            <strong>Resposta do Servidor:</strong> {result.responseBody || '(corpo vazio)'}
+
+                          <div className="bg-slate-900 text-slate-100 p-2.5 rounded-lg font-mono text-[11px] max-h-24 overflow-y-auto leading-relaxed">
+                            <div className="text-slate-400 text-[10px] mb-1 font-sans">Resposta do Servidor Externo:</div>
+                            {result.responseBody || '(corpo da resposta vazio)'}
                           </div>
                         </div>
                       )}
@@ -1508,26 +1716,84 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
                 </div>
               </div>
 
-              {/* Secret Token */}
-              <div>
-                <label className="block text-xs font-bold text-[#1A1D21] mb-1">
-                  Chave Secreta de Assinatura (Secret Token / HMAC)
-                </label>
+              {/* Secret Key / HMAC Configuration */}
+              <div className="p-3.5 rounded-xl border border-blue-200 bg-blue-50/40 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-blue-600" />
+                    <div>
+                      <label className="block text-xs font-bold text-gray-900">
+                        Chave Secreta de Assinatura (Secret Key / HMAC SHA-256)
+                      </label>
+                      <span className="text-[10px] text-gray-500">
+                        Permite que seu servidor externo valide se a requisição originou autenticamente do ManyFlow
+                      </span>
+                    </div>
+                  </div>
+                  {secretToken && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold">
+                      Assinatura Ativa
+                    </span>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={secretToken}
-                    onChange={(e) => setSecretToken(e.target.value)}
-                    placeholder="whsec_..."
-                    className="w-full px-3 py-2 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] font-mono text-xs text-[#1A1D21] focus:outline-none focus:ring-1 focus:ring-[#0084FF]"
-                  />
+                  <div className="relative flex-1">
+                    <input
+                      type={showSecretToken ? 'text' : 'password'}
+                      value={secretToken}
+                      onChange={(e) => setSecretToken(e.target.value)}
+                      placeholder="whsec_8f92a3c71..."
+                      className="w-full pl-3 pr-10 py-2 rounded-lg bg-white border border-gray-300 font-mono text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSecretToken(!showSecretToken)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 cursor-pointer"
+                      title={showSecretToken ? 'Ocultar chave secreta' : 'Visualizar chave secreta'}
+                    >
+                      {showSecretToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => setSecretToken(`whsec_${Math.random().toString(36).substring(2, 14)}`)}
-                    className="px-2.5 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700 font-bold shrink-0 cursor-pointer"
+                    onClick={() => {
+                      const newSecret = `whsec_${Math.random().toString(36).substring(2, 14)}${Math.random().toString(36).substring(2, 8)}`;
+                      setSecretToken(newSecret);
+                    }}
+                    className="px-3 py-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-gray-700 font-bold text-xs shrink-0 cursor-pointer shadow-xs"
+                    title="Gerar uma nova chave de alta entropia"
                   >
-                    Gerar
+                    Gerar Nova
                   </button>
+
+                  {secretToken && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(secretToken, 'modal_secret')}
+                      className="p-2 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-gray-700 font-bold shrink-0 cursor-pointer shadow-xs"
+                      title="Copiar Secret Key"
+                    >
+                      {copiedKey === 'modal_secret' ? (
+                        <Check className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                <div className="p-2 rounded-lg bg-white border border-blue-100 text-[11px] text-gray-600 space-y-1">
+                  <p className="font-semibold text-gray-700 flex items-center gap-1">
+                    <span>Transmissão nos Headers:</span>
+                    <code className="bg-slate-100 px-1.5 py-0.5 rounded text-purple-700 font-mono text-[10px]">X-ManyFlow-Signature</code>
+                    <span>e</span>
+                    <code className="bg-slate-100 px-1.5 py-0.5 rounded text-purple-700 font-mono text-[10px]">X-Hub-Signature-256</code>
+                  </p>
+                  <p className="text-[10px] text-gray-500">
+                    O cabeçalho conterá <code className="font-mono text-gray-700">sha256=&lt;hash&gt;</code> calculado via HMAC com esta chave secreta e o corpo cru da mensagem JSON.
+                  </p>
                 </div>
               </div>
 
@@ -1722,28 +1988,121 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
                 />
               </div>
 
+              {/* In-Modal Test Connection Section */}
+              <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/30 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-indigo-600 fill-indigo-600" />
+                    <div>
+                      <span className="font-bold text-xs text-gray-900 block">
+                        Testar Conexão com este Endpoint
+                      </span>
+                      <span className="text-[10px] text-gray-500">
+                        Dispara um payload de teste imediato com a URL e Secret Key acima para validar a recepção
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleModalTestDispatch}
+                    disabled={modalTesting || !url.trim()}
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  >
+                    {modalTesting ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>Testando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                        <span>Testar Conexão</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Modal Test Feedback Box */}
+                {modalTestFeedback && (
+                  <div className={`p-3 rounded-lg border text-xs space-y-2 animate-in fade-in duration-200 ${
+                    modalTestFeedback.success 
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-950' 
+                      : 'bg-rose-50 border-rose-300 text-rose-950'
+                  }`}>
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-1.5">
+                        {modalTestFeedback.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                        )}
+                        <span className="font-bold">
+                          HTTP {modalTestFeedback.statusCode} {modalTestFeedback.success ? 'OK - Resposta Recebida' : 'Falha na Conexão'}
+                        </span>
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-600">
+                          {modalTestFeedback.durationMs}ms
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsInspectorModalOpen(true)}
+                        className="px-2.5 py-1 bg-white hover:bg-gray-100 text-gray-800 text-[11px] font-bold rounded border border-gray-300 shadow-xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <Terminal className="w-3 h-3 text-blue-600" />
+                        <span>Ver Resposta & HMAC Completo</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-slate-900 text-slate-100 p-2 rounded font-mono text-[10px] max-h-20 overflow-y-auto">
+                      {modalTestFeedback.responseBody || '(resposta com corpo vazio)'}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Actions */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="py-2 px-4 rounded-lg text-xs font-semibold text-[#64748B] hover:bg-gray-100 cursor-pointer"
+                  onClick={handleModalTestDispatch}
+                  disabled={modalTesting || !url.trim()}
+                  className="py-2 px-3 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  Cancelar
+                  <Zap className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Testar Antes de Salvar</span>
                 </button>
-                <button
-                  type="submit"
-                  disabled={!name.trim() || !url.trim() || selectedEvents.length === 0}
-                  className="py-2 px-5 rounded-lg bg-[#0084FF] hover:bg-[#0073E6] disabled:opacity-50 text-white text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>{editingEndpointId ? 'Salvar Alterações' : 'Cadastrar Webhook'}</span>
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="py-2 px-4 rounded-lg text-xs font-semibold text-[#64748B] hover:bg-gray-100 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!name.trim() || !url.trim() || selectedEvents.length === 0}
+                    className="py-2 px-5 rounded-lg bg-[#0084FF] hover:bg-[#0073E6] disabled:opacity-50 text-white text-xs font-bold shadow-xs flex items-center gap-2 cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{editingEndpointId ? 'Salvar Alterações' : 'Cadastrar Webhook'}</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Webhook Response Inspector Modal */}
+      <WebhookResponseInspectorModal
+        isOpen={isInspectorModalOpen}
+        onClose={() => setIsInspectorModalOpen(false)}
+        data={inspectorData}
+      />
     </div>
   );
 };

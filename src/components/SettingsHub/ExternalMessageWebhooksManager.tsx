@@ -43,6 +43,7 @@ import {
   Activity,
   ArrowRight,
   ShieldCheck,
+  Database,
   SlidersHorizontal,
   X,
   FileCode,
@@ -79,6 +80,20 @@ interface EventMetadata {
 }
 
 const MESSAGE_EVENTS: EventMetadata[] = [
+  {
+    id: 'new_message',
+    label: 'Nova Mensagem no Instagram (new_message)',
+    category: 'inbound',
+    description: 'Disparado em tempo real no webhook externo sempre que um seguidor ou cliente envia uma nova mensagem direta (DM) no Instagram.',
+    badge: 'Instagram Direct'
+  },
+  {
+    id: 'comment_mention',
+    label: 'Menção em Comentário no Instagram (comment_mention)',
+    category: 'social',
+    description: 'Disparado em tempo real no webhook externo quando alguém menciona (@sua_marca) em comentários de posts, Reels ou Stories do Instagram.',
+    badge: 'Instagram Comentários'
+  },
   {
     id: 'message.received',
     label: 'Mensagem de Texto Recebida (Inbound)',
@@ -320,18 +335,35 @@ export const ExternalMessageWebhooksManager: React.FC<ExternalMessageWebhooksMan
     message: ''
   });
 
+  // MongoDB Status & Syncing
+  const [dbStatus, setDbStatus] = useState<{ connected: boolean; source: string }>({ connected: true, source: 'mongodb' });
+  const [isSyncingDb, setIsSyncingDb] = useState(false);
+
   // Load Data
   const loadData = async () => {
     setLoading(true);
     try {
-      const endpointsData = await externalWebhookService.getEndpoints(tenantId);
-      const logsData = await externalWebhookService.getDeliveryLogs();
+      const [endpointsData, logsData, dbCheck] = await Promise.all([
+        externalWebhookService.getEndpoints(tenantId),
+        externalWebhookService.getDeliveryLogs(),
+        externalWebhookService.checkDbStatus()
+      ]);
       setEndpoints(endpointsData);
       setLogs(logsData);
+      setDbStatus(dbCheck);
     } catch (e) {
       console.error('Error loading external webhooks', e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncingDb(true);
+    try {
+      await loadData();
+    } finally {
+      setIsSyncingDb(false);
     }
   };
 
@@ -642,11 +674,18 @@ export const ExternalMessageWebhooksManager: React.FC<ExternalMessageWebhooksMan
         <div className="absolute right-0 top-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold">
-              <Radio className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-              <span>Event-Driven Callbacks & Webhook Receivers</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span className="text-emerald-300">Pronto para Integração</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-300 text-xs font-bold">
+                <Radio className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                <span>Event-Driven Callbacks & Webhook Receivers</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="text-emerald-300">Pronto para Integração</span>
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/25 border border-purple-400/40 text-purple-200 text-xs font-bold">
+                <Database className="w-3.5 h-3.5 text-purple-300" />
+                <span>MongoDB: {dbStatus.connected ? 'Persistência Ativa (external_webhooks)' : 'Modo Local / Memória'}</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              </div>
             </div>
             <h3 className="text-xl lg:text-2xl font-black tracking-tight text-white flex items-center gap-2.5">
               <span>Webhooks & Callbacks para Plataformas Externas</span>
@@ -658,6 +697,15 @@ export const ExternalMessageWebhooksManager: React.FC<ExternalMessageWebhooksMan
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncingDb}
+              className="py-2.5 px-4 rounded-xl bg-purple-500/25 hover:bg-purple-500/35 border border-purple-400/40 text-purple-200 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer backdrop-blur-md disabled:opacity-60"
+              title="Sincronizar endpoints e logs diretamente do MongoDB"
+            >
+              <RefreshCw className={`w-4 h-4 text-purple-300 ${isSyncingDb ? 'animate-spin' : ''}`} />
+              <span>{isSyncingDb ? 'Sincronizando...' : 'Sincronizar MongoDB'}</span>
+            </button>
             <button
               onClick={() => {
                 setSelectedRetryEndpoint(null);
@@ -1690,6 +1738,15 @@ export const ExternalMessageWebhooksManager: React.FC<ExternalMessageWebhooksMan
                       className="text-[10px] font-bold text-blue-600 hover:underline cursor-pointer"
                     >
                       Selecionar Todos
+                    </button>
+                    <span className="text-slate-300">•</span>
+                    <button
+                      type="button"
+                      onClick={() => setFormState({ ...formState, events: ['new_message', 'comment_mention'] })}
+                      className="text-[10px] font-bold text-pink-600 dark:text-pink-400 hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full bg-pink-500" />
+                      <span>Apenas Instagram (DMs & Menções)</span>
                     </button>
                     <span className="text-slate-300">•</span>
                     <button

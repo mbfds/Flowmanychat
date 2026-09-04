@@ -21,7 +21,7 @@ class MongoDBService {
   private baseUrl = '/api';
 
   // =========================================================================
-  // 1. FLOWS CRUD OPERATIONS
+  // 1. FLOWS CRUD OPERATIONS & RETRY STRATEGY
   // =========================================================================
 
   /**
@@ -48,6 +48,77 @@ class MongoDBService {
       console.warn('[MongoDBService] Erro ao buscar fluxos do MongoDB, usando fallback local:', error);
       return [];
     }
+  }
+
+  /**
+   * Fetch automation flows with automatic retry strategy and exponential backoff
+   */
+  async getFlowsWithRetry(options?: {
+    channel?: string;
+    isActive?: boolean;
+    maxRetries?: number;
+    initialDelayMs?: number;
+    backoffFactor?: number;
+    onRetry?: (attempt: number, maxRetries: number, error: any, nextDelayMs: number) => void;
+  }): Promise<Flow[]> {
+    const maxRetries = options?.maxRetries ?? 3;
+    const initialDelay = options?.initialDelayMs ?? 600;
+    const backoffFactor = options?.backoffFactor ?? 1.5;
+
+    let lastError: any = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const params = new URLSearchParams();
+        if (options?.channel && options.channel !== 'all') {
+          params.append('channel', options.channel);
+        }
+        if (options?.isActive !== undefined) {
+          params.append('isActive', String(options.isActive));
+        }
+
+        const queryString = params.toString() ? `?${params.toString()}` : '';
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        const response = await fetch(`${this.baseUrl}/flows${queryString}`, {
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (Array.isArray(data.flows)) {
+          return data.flows;
+        }
+        return [];
+      } catch (err: any) {
+        lastError = err;
+        const nextDelay = Math.round(initialDelay * Math.pow(backoffFactor, attempt - 1));
+
+        if (attempt < maxRetries) {
+          console.warn(
+            `[MongoDBService] Falha na tentativa ${attempt}/${maxRetries} ao carregar fluxos. Tentando novamente em ${nextDelay}ms...`,
+            err
+          );
+          if (options?.onRetry) {
+            options.onRetry(attempt, maxRetries, err, nextDelay);
+          }
+          await new Promise((res) => setTimeout(res, nextDelay));
+        } else {
+          console.error(
+            `[MongoDBService] Todas as ${maxRetries} tentativas de sincronizar fluxos falharam.`,
+            err
+          );
+        }
+      }
+    }
+
+    // Graceful fallback to empty array or previously cached flows
+    return [];
   }
 
   /**
@@ -538,6 +609,129 @@ class MongoDBService {
     } catch (error: any) {
       return { ok: false, latencyMs: 0, error: error.message };
     }
+  }
+
+  /**
+   * Verify connectivity with MongoDB backend with timeout and optional retries
+   */
+  async checkConnectivity(options?: { timeoutMs?: number; retries?: number }): Promise<{
+    connected: boolean;
+    latencyMs: number;
+    dbName: string;
+    error?: string;
+  }> {
+    const timeoutMs = options?.timeoutMs ?? 4000;
+    const maxRetries = options?.retries ?? 2;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const startTime = Date.now();
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+        const response = await fetch(`${this.baseUrl}/db/ping`, {
+          method: 'POST',
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+
+        const latencyMs = Date.now() - startTime;
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ok) {
+            return {
+              connected: true,
+              latencyMs: data.latencyMs || latencyMs,
+              dbName: data.dbName || 'manyflow'
+            };
+          }
+        }
+      } catch {
+        if (attempt < maxRetries) {
+          await new Promise((res) => setTimeout(res, 400));
+        }
+      }
+    }
+
+    // Secondary fallback: check status endpoint
+    try {
+      const status = await this.getStatus();
+      return {
+        connected: Boolean(status.connected),
+        latencyMs: 0,
+        dbName: status.dbName || 'manyflow',
+        error: status.error || (!status.connected ? 'MongoDB não conectado' : undefined)
+      };
+    } catch (fallbackErr: any) {
+      return {
+        connected: false,
+        latencyMs: 0,
+        dbName: 'manyflow',
+        error: fallbackErr.message || 'Falha ao validar conectividade'
+      };
+    }
+  }
+
+  /**
+   * Orchestrate full database synchronization on startup with real-time progress callbacks and retry strategy
+   */
+  async syncInitialDataWithRetry(callbacks?: {
+    onProgress?: (progress: number, statusMessage: string, phase: 'connectivity' | 'flows' | 'contacts' | 'completed') => void;
+    maxRetries?: number;
+  }): Promise<{
+    flows: Flow[];
+    contacts: Contact[];
+    connected: boolean;
+    latencyMs: number;
+  }> {
+    const onProgress = callbacks?.onProgress;
+    const report = (p: number, msg: string, phase: 'connectivity' | 'flows' | 'contacts' | 'completed') => {
+      if (onProgress) onProgress(p, msg, phase);
+    };
+
+    // Phase 1: Connectivity Check (0% -> 25%)
+    report(5, 'Iniciando verificação de conexão...', 'connectivity');
+    await new Promise((r) => setTimeout(r, 80));
+    report(15, 'Verificando conectividade com o MongoDB...', 'connectivity');
+
+    const conn = await this.checkConnectivity({ timeoutMs: 4500, retries: 2 });
+    const connLabel = conn.connected 
+      ? `Conexão ativa com MongoDB (${conn.latencyMs}ms)` 
+      : 'Modo local em memória ativo';
+    report(25, connLabel, 'connectivity');
+
+    // Phase 2: Flows Sync with Retry (25% -> 70%)
+    report(35, 'Carregando fluxos de automação...', 'flows');
+    const flows = await this.getFlowsWithRetry({
+      maxRetries: callbacks?.maxRetries ?? 3,
+      initialDelayMs: 500,
+      onRetry: (attempt, maxRetries, _err, nextDelay) => {
+        report(
+          Math.min(65, 35 + attempt * 10),
+          `Tentativa ${attempt}/${maxRetries} ao sincronizar fluxos. Próxima tentativa em ${nextDelay}ms...`,
+          'flows'
+        );
+      }
+    });
+
+    report(70, `${flows.length} ${flows.length === 1 ? 'fluxo carregado' : 'fluxos carregados'} com sucesso`, 'flows');
+
+    // Phase 3: Contacts Sync (70% -> 90%)
+    report(75, 'Sincronizando contatos do CRM...', 'contacts');
+    const contacts = await this.getContacts({ limit: 100 });
+    report(90, `${contacts.length} ${contacts.length === 1 ? 'contato sincronizado' : 'contatos sincronizados'}`, 'contacts');
+
+    // Phase 4: Finalize (90% -> 100%)
+    report(96, 'Finalizando sincronização...', 'completed');
+    await new Promise((r) => setTimeout(r, 120));
+    report(100, 'Sincronização concluída com sucesso!', 'completed');
+
+    return {
+      flows,
+      contacts,
+      connected: conn.connected,
+      latencyMs: conn.latencyMs
+    };
   }
 }
 
