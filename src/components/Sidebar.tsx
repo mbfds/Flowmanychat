@@ -27,7 +27,9 @@ import {
   CalendarCheck,
   ShieldCheck,
   Receipt,
-  Package
+  Package,
+  Calendar,
+  MessageSquare
 } from 'lucide-react';
 import { NavigationTab, ChannelType } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -71,6 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'triggers' as NavigationTab, label: 'Gatilhos & Palavras-Chave', icon: Zap, badge: '4' },
     { id: 'appointments' as NavigationTab, label: 'Agendamentos nos Canais', icon: CalendarCheck, badge: '5 Canais' },
     { id: 'comment_tools' as NavigationTab, label: 'Comentário ➔ Direct', icon: MessageSquareReply },
+    { id: 'postiz_planner' as NavigationTab, label: 'Planejador Social (Postiz)', icon: Calendar, badge: 'Postiz' },
     { id: 'inbox' as NavigationTab, label: 'Atendimento ao Vivo', icon: Inbox, badge: unreadConversationsCount > 0 ? `${unreadConversationsCount}` : undefined, highlight: unreadConversationsCount > 0 },
     { id: 'contacts' as NavigationTab, label: 'Audiência & CRM', icon: Users, badge: '4.2k' },
     { id: 'analytics' as NavigationTab, label: 'Resumo do Dia & Métricas', icon: BarChart3 },
@@ -180,10 +183,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between text-[10px] font-bold text-[#64748B] dark:text-slate-400 uppercase tracking-wider mb-2 px-1">
               <span>Canal de Foco</span>
               <span className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 capitalize">
-                {selectedChannel === 'omnichannel' ? 'Todos' : selectedChannel === 'messenger' ? 'Facebook' : selectedChannel}
+                {selectedChannel === 'omnichannel' ? 'Todos' : selectedChannel === 'messenger' ? 'Facebook' : selectedChannel === 'sms' ? 'SMS Gateway' : selectedChannel}
               </span>
             </div>
-            <div className="grid grid-cols-5 gap-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-[#E2E8F0] dark:border-slate-800">
+            <div className="grid grid-cols-6 gap-1 bg-white dark:bg-slate-900 p-1 rounded-lg border border-[#E2E8F0] dark:border-slate-800">
               <button
                 id="filter_omnichannel"
                 onClick={() => onSelectChannel('omnichannel')}
@@ -243,6 +246,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 title="Telegram Bot API"
               >
                 <Send className="w-4 h-4" />
+              </button>
+              <button
+                id="filter_sms"
+                onClick={() => onSelectChannel('sms')}
+                className={`py-1.5 rounded-md transition-all flex items-center justify-center cursor-pointer ${
+                  selectedChannel === 'sms'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-[#64748B] dark:text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40'
+                }`}
+                title="SMS Gateway (HttpSMS Android)"
+              >
+                <MessageSquare className="w-4 h-4" />
               </button>
             </div>
           </div>

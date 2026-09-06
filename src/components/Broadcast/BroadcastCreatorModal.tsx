@@ -86,8 +86,8 @@ export const BroadcastCreatorModal: React.FC<BroadcastCreatorModalProps> = ({
       ? `Disparo: ${initialUtilityTemplate.displayName}` 
       : '🔥 Promoção Especial Direct'
   );
-  const [channel, setChannel] = useState<'instagram' | 'messenger' | 'omnichannel'>(
-    initialUtilityTemplate?.channel || 'instagram'
+  const [channel, setChannel] = useState<'instagram' | 'messenger' | 'omnichannel' | 'sms'>(
+    (initialUtilityTemplate?.channel as any) || 'instagram'
   );
   const [metaMessageTag, setMetaMessageTag] = useState<'MARKETING_OPT_IN' | 'CONFIRMED_EVENT_UPDATE' | 'POST_PURCHASE_UPDATE' | 'ACCOUNT_UPDATE'>(
     'MARKETING_OPT_IN'
@@ -678,7 +678,7 @@ export const BroadcastCreatorModal: React.FC<BroadcastCreatorModalProps> = ({
                 <label className="block text-xs font-bold text-[#1A1D21] uppercase tracking-wider mb-2">
                   Canal de Destino dos Disparos
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div
                     onClick={() => setChannel('instagram')}
                     className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
@@ -723,10 +723,27 @@ export const BroadcastCreatorModal: React.FC<BroadcastCreatorModalProps> = ({
                   >
                     <div className="flex items-center gap-2 mb-1.5">
                       <Layers className="w-5 h-5 text-purple-600" />
-                      <span className="font-bold text-sm text-[#1A1D21]">Omnichannel (Ambos)</span>
+                      <span className="font-bold text-sm text-[#1A1D21]">Omnichannel</span>
                     </div>
                     <p className="text-xs text-[#64748B]">
                       Alcança contatos tanto no Instagram quanto no Messenger simultaneamente.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setChannel('sms')}
+                    className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      channel === 'sms'
+                        ? 'border-teal-500 bg-teal-50/50 shadow-xs'
+                        : 'border-[#E2E8F0] hover:border-gray-300 bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Smartphone className="w-5 h-5 text-teal-600" />
+                      <span className="font-bold text-sm text-[#1A1D21]">SMS Gateway</span>
+                    </div>
+                    <p className="text-xs text-[#64748B]">
+                      Disparo de SMS via HttpSMS direto do seu aparelho Android GSM.
                     </p>
                   </div>
                 </div>

@@ -16,26 +16,57 @@ import {
   Trophy,
   Percent,
   TrendingUp,
-  BarChart2
+  TrendingDown,
+  BarChart2, 
+  Smartphone,
+  AlertTriangle,
+  Check,
+  Activity,
+  Target
 } from 'lucide-react';
 import { FlowNode, NodeType } from '../../types';
+
+export interface NodePerformanceData {
+  traversalCount: number;
+  traversalRate: number; // percentage e.g. 94.2%
+  dropoffRate: number;   // percentage e.g. 5.8%
+  conversionRate: number; // percentage e.g. 78.4%
+  avgResponseTimeSec?: number;
+  status?: 'optimal' | 'good' | 'warning' | 'critical';
+}
 
 interface FlowNodeCardProps {
   node: FlowNode;
   isSelected: boolean;
+  isMultiSelected?: boolean;
   onSelect: (node: FlowNode) => void;
   onDelete: (nodeId: string) => void;
   onDuplicate: (node: FlowNode) => void;
   onStartConnection?: (nodeId: string, handleType?: string, sourceHandleId?: string) => void;
+  isAuditActive?: boolean;
+  isOrphan?: boolean;
+  orphanReason?: string;
+  incomingCount?: number;
+  outgoingCount?: number;
+  isPerformanceActive?: boolean;
+  performanceData?: NodePerformanceData;
 }
 
 export const FlowNodeCard: React.FC<FlowNodeCardProps> = ({
   node,
   isSelected,
+  isMultiSelected = false,
   onSelect,
   onDelete,
   onDuplicate,
-  onStartConnection
+  onStartConnection,
+  isAuditActive = false,
+  isOrphan = false,
+  orphanReason,
+  incomingCount = 0,
+  outgoingCount = 0,
+  isPerformanceActive = false,
+  performanceData
 }) => {
   const getNodeConfig = (type: NodeType) => {
     switch (type) {
@@ -114,14 +145,113 @@ export const FlowNodeCard: React.FC<FlowNodeCardProps> = ({
         e.stopPropagation();
         onSelect(node);
       }}
-      className={`w-84 rounded-xl bg-white border shadow-sm transition-all duration-150 cursor-pointer select-none group ${
-        isSelected
+      className={`w-84 rounded-xl bg-white border transition-all duration-150 cursor-pointer select-none group relative ${
+        isMultiSelected
+          ? 'border-blue-600 ring-4 ring-blue-500/30 shadow-2xl shadow-blue-500/20 scale-[1.015]'
+          : isAuditActive && isOrphan
+          ? 'border-amber-500 ring-4 ring-amber-400/50 shadow-2xl shadow-amber-500/20 scale-[1.02]'
+          : isSelected
           ? 'border-[#0084FF] ring-2 ring-[#0084FF]/20 shadow-md scale-[1.01]'
+          : isAuditActive
+          ? 'border-[#E2E8F0] opacity-60 hover:opacity-100 hover:border-gray-300 hover:shadow-md'
           : 'border-[#E2E8F0] hover:border-gray-300 hover:shadow-md'
       }`}
     >
+      {/* Multi-Selection Badge */}
+      {isMultiSelected && (
+        <div 
+          id={`multiselect_badge_${node.id}`}
+          className="absolute -top-2.5 -left-2.5 bg-blue-600 text-white rounded-full p-1 shadow-md border-2 border-white dark:border-slate-900 z-30 flex items-center justify-center animate-in zoom-in-75"
+          title="Nó selecionado em grupo"
+        >
+          <Check className="w-3.5 h-3.5 stroke-[3]" />
+        </div>
+      )}
+
+      {/* Flow Performance Overview - Metrics Overlay Directly On Top of Workflow Node */}
+      {isPerformanceActive && performanceData && (
+        <div 
+          id={`node_performance_overlay_${node.id}`}
+          className={`px-3 py-2 rounded-t-xl border-b text-xs font-sans shadow-inner transition-all ${
+            performanceData.dropoffRate > 25
+              ? 'bg-gradient-to-r from-rose-950/95 via-rose-900/90 to-slate-900 text-rose-100 border-rose-700/60'
+              : performanceData.dropoffRate > 12
+              ? 'bg-gradient-to-r from-amber-950/95 via-amber-900/90 to-slate-900 text-amber-100 border-amber-700/60'
+              : 'bg-gradient-to-r from-slate-950/95 via-slate-900 to-indigo-950/90 text-slate-100 border-slate-700/60'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-1 mb-1">
+            <div className="flex items-center gap-1.5 font-bold">
+              <Activity className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-300">Travessia:</span>
+              <span className="text-white font-mono font-bold text-[11px]">{performanceData.traversalCount.toLocaleString()}</span>
+              <span className="text-[10px] text-blue-300 font-mono font-bold">({performanceData.traversalRate}%)</span>
+            </div>
+            
+            <div className="flex items-center gap-1">
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono flex items-center gap-0.5 ${
+                performanceData.dropoffRate > 20
+                  ? 'bg-rose-500/30 text-rose-300 border border-rose-500/40'
+                  : performanceData.dropoffRate > 10
+                  ? 'bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                  : 'bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
+              }`}>
+                <TrendingDown className="w-3 h-3" />
+                <span>-{performanceData.dropoffRate}% drop</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Traversal Retention & Drop-off Bar */}
+          <div className="w-full bg-slate-800/90 rounded-full h-1.5 overflow-hidden flex my-1">
+            <div 
+              className={`h-full transition-all duration-500 ${
+                performanceData.traversalRate >= 80 
+                  ? 'bg-emerald-400' 
+                  : performanceData.traversalRate >= 50 
+                  ? 'bg-blue-400' 
+                  : 'bg-amber-400'
+              }`}
+              style={{ width: `${Math.min(100, Math.max(5, performanceData.traversalRate))}%` }}
+              title={`Taxa de Travessia: ${performanceData.traversalRate}%`}
+            />
+            <div 
+              className="h-full bg-rose-500/80 transition-all duration-500"
+              style={{ width: `${Math.min(100, Math.max(0, performanceData.dropoffRate))}%` }}
+              title={`Taxa de Abandono (Drop-off): ${performanceData.dropoffRate}%`}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[10px] text-slate-300 mt-1">
+            <span className="flex items-center gap-1">
+              <Target className="w-3 h-3 text-emerald-400" />
+              <span>Conversão: <strong className="text-emerald-300 font-mono font-bold">{performanceData.conversionRate}%</strong></span>
+            </span>
+            {performanceData.avgResponseTimeSec !== undefined && (
+              <span className="font-mono text-slate-400">~{performanceData.avgResponseTimeSec}s latência</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Visual Audit Orphan Warning Bar */}
+      {isAuditActive && isOrphan && (
+        <div 
+          id={`audit_orphan_badge_${node.id}`}
+          className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-3 py-1.5 rounded-t-xl flex items-center justify-between text-[11px] font-bold shadow-xs animate-pulse"
+        >
+          <span className="flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            <span>Nó Órfão Desconectado</span>
+          </span>
+          <span className="text-[10px] bg-black/20 px-1.5 py-0.5 rounded font-mono font-bold">
+            {incomingCount} entrada • {outgoingCount} saída
+          </span>
+        </div>
+      )}
+
       {/* Node Header */}
-      <div className={`px-4 py-3 flex items-center justify-between rounded-t-xl ${config.headerBg}`}>
+      <div className={`px-4 py-3 flex items-center justify-between ${(isAuditActive && isOrphan) || (isPerformanceActive && performanceData) ? '' : 'rounded-t-xl'} ${config.headerBg}`}>
         <div className="flex items-center gap-2.5 min-w-0">
           <div className={`p-1.5 rounded-lg shrink-0 ${config.iconBg}`}>
             <Icon className="w-4 h-4" />
@@ -322,6 +452,23 @@ export const FlowNodeCard: React.FC<FlowNodeCardProps> = ({
               <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1.5 rounded-lg">
                 <ChevronRight className="w-3.5 h-3.5 shrink-0 text-amber-600" />
                 <span className="font-semibold">Pausar Bot ➔ Fila Humana</span>
+              </div>
+            )}
+            {node.data.actionType === 'send_sms_httpsms' && (
+              <div className="p-2 rounded-lg bg-teal-50 border border-teal-200 text-xs text-teal-900 space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1 font-bold text-teal-800">
+                    <Smartphone className="w-3 h-3 text-teal-600 shrink-0" />
+                    <span>SMS (HttpSMS)</span>
+                  </div>
+                  <span className="text-[9px] font-mono bg-teal-200/80 text-teal-800 px-1 py-0.2 rounded font-bold">Android GSM</span>
+                </div>
+                <div className="text-[10px] text-teal-800 line-clamp-1 italic">
+                  "{node.data.smsMessageText || 'Disparo SMS'}"
+                </div>
+                <div className="text-[9px] text-teal-600 font-mono truncate">
+                  Para: {node.data.smsRecipientPhone || '{phone}'}
+                </div>
               </div>
             )}
             {node.data.fieldToSet && (

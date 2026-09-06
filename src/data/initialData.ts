@@ -489,7 +489,8 @@ export const DEMO_CONTACTS: Contact[] = [
     status: "active",
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     lastInteractionAt: "Há 15 min",
-    totalInteractions: 8
+    totalInteractions: 8,
+    leadScore: 85
   },
   {
     id: "demo_c_2",
@@ -504,11 +505,106 @@ export const DEMO_CONTACTS: Contact[] = [
     status: "active",
     createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
     lastInteractionAt: "Há 1 hora",
-    totalInteractions: 12
+    totalInteractions: 12,
+    leadScore: 65
+  },
+  {
+    id: "demo_c_3",
+    name: "Beatriz Nogueira",
+    username: "bia.nogueira_fit",
+    channel: "instagram",
+    avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80",
+    email: "beatriz@fitness.com",
+    phone: "+55 (31) 98765-3003",
+    tags: ["Lead-Frio", "Ebook-Baixado"],
+    customFields: { interesse: "Nutrição" },
+    status: "active",
+    createdAt: new Date(Date.now() - 86400000 * 40).toISOString(),
+    lastInteractionAt: "Há 35 dias",
+    totalInteractions: 2,
+    leadScore: 25
+  },
+  {
+    id: "demo_c_4",
+    name: "Lucas Alencar",
+    username: "lucas_alencar92",
+    channel: "instagram",
+    avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
+    email: "lucas@tecnologia.com",
+    phone: "+55 (41) 99123-4004",
+    tags: ["Desengajado", "Webinar-2025"],
+    customFields: {},
+    status: "active",
+    createdAt: new Date(Date.now() - 86400000 * 110).toISOString(),
+    lastInteractionAt: "Há 95 dias",
+    totalInteractions: 1,
+    leadScore: 15
+  },
+  {
+    id: "demo_c_5",
+    name: "Mariana Vasconcelos",
+    username: "mari_vasconcelos",
+    channel: "instagram",
+    avatarUrl: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&auto=format&fit=crop&q=80",
+    email: "mari@advocacia.com.br",
+    phone: "+55 (19) 98877-5005",
+    tags: ["Sem-Interesse", "Campanha-Antiga"],
+    customFields: {},
+    status: "active",
+    createdAt: new Date(Date.now() - 86400000 * 150).toISOString(),
+    lastInteractionAt: "Há 140 dias",
+    totalInteractions: 1,
+    leadScore: 10
+  },
+  {
+    id: "demo_c_6",
+    name: "Gabriel Siqueira",
+    username: "gabriel.siqueira",
+    channel: "messenger",
+    avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80",
+    email: "gabriel@comercial.com",
+    phone: "+55 (51) 99345-6006",
+    tags: ["Cliente-VIP", "Contrato-Ativo"],
+    customFields: { plano: "Enterprise" },
+    status: "active",
+    createdAt: new Date(Date.now() - 86400000 * 180).toISOString(),
+    lastInteractionAt: "Há 120 dias",
+    totalInteractions: 15,
+    leadScore: 90
+  },
+  {
+    id: "demo_c_7",
+    name: "Juliana Peixoto",
+    username: "ju_peixoto_arts",
+    channel: "instagram",
+    avatarUrl: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80",
+    email: "ju@peixotoarts.com",
+    phone: "+55 (81) 98456-7007",
+    tags: ["Inativo", "Bouncer"],
+    customFields: {},
+    status: "active",
+    createdAt: new Date(Date.now() - 86400000 * 250).toISOString(),
+    lastInteractionAt: "Há 220 dias",
+    totalInteractions: 1,
+    leadScore: 5
+  },
+  {
+    id: "demo_c_8",
+    name: "Felipe Macedo",
+    username: "felipe.macedo_dev",
+    channel: "instagram",
+    avatarUrl: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80",
+    email: "felipe@devstudio.io",
+    phone: "+55 (61) 98111-8008",
+    tags: ["Obsoleto", "Lista-2024"],
+    customFields: {},
+    status: "active",
+    createdAt: new Date(Date.now() - 86400000 * 450).toISOString(),
+    lastInteractionAt: "Há 410 dias",
+    totalInteractions: 1,
+    leadScore: 0
   }
 ];
-
-export const INITIAL_CONVERSATIONS: LiveConversation[] = [];
 
 export const DEMO_CONVERSATIONS: LiveConversation[] = [
   {
@@ -554,8 +650,183 @@ export const DEMO_CONVERSATIONS: LiveConversation[] = [
         timestamp: "14:10"
       }
     ]
+  },
+  {
+    id: "demo_conv_2",
+    contactId: "demo_c_2",
+    contact: {
+      id: "demo_c_2",
+      name: "Rodrigo Barbosa",
+      username: "rodrigo.tech",
+      channel: "instagram",
+      avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80",
+      email: "rodrigo@techsolutions.com",
+      phone: "+55 (11) 97123-2002",
+      tags: ["Lead-Quente", "Interesse-Plano-Pro", "Follow-up-Pendente"],
+      customFields: { plano_interesse: "Pro Anual" },
+      status: "active",
+      createdAt: new Date(Date.now() - 86400000 * 10).toISOString(),
+      lastInteractionAt: "Há 3 dias",
+      totalInteractions: 5,
+      leadScore: 85
+    },
+    channel: "instagram",
+    status: "human_takeover",
+    unreadCount: 0,
+    isBotActive: false,
+    lastMessage: {
+      text: "Olá Rodrigo! Enviamos a proposta personalizada para seu e-mail. Conseguiu avaliar as condições especiais?",
+      timestamp: "Há 3 dias",
+      sender: "agent"
+    },
+    messages: [
+      {
+        id: "m_201",
+        sender: "user",
+        channel: "instagram",
+        text: "Gostei da apresentação, vocês enviam uma proposta formal?",
+        timestamp: "3 dias atrás"
+      },
+      {
+        id: "m_202",
+        sender: "agent",
+        channel: "instagram",
+        text: "Olá Rodrigo! Enviamos a proposta personalizada para seu e-mail. Conseguiu avaliar as condições especiais?",
+        timestamp: "Há 3 dias"
+      }
+    ]
+  },
+  {
+    id: "demo_conv_3",
+    contactId: "demo_c_3",
+    contact: {
+      id: "demo_c_3",
+      name: "Beatriz Mendonça",
+      username: "biastyle_oficial",
+      channel: "instagram",
+      avatarUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80",
+      email: "bia@estiloboutique.com.br",
+      phone: "+55 (21) 98234-3003",
+      tags: ["Carrinho-Abandonado", "Lead-Morno"],
+      customFields: { valor_carrinho: "R$ 489,00" },
+      status: "active",
+      createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
+      lastInteractionAt: "Há 52 horas",
+      totalInteractions: 4,
+      leadScore: 65
+    },
+    channel: "instagram",
+    status: "open",
+    unreadCount: 0,
+    isBotActive: true,
+    lastMessage: {
+      text: "Oi Bia! Notamos que seu cupom exclusivo de 20% OFF expira em breve. Gostaria que eu reservasse suas peças?",
+      timestamp: "Há 52 horas",
+      sender: "bot"
+    },
+    messages: [
+      {
+        id: "m_301",
+        sender: "user",
+        channel: "instagram",
+        text: "Vocês parcelam em até quantas vezes sem juros?",
+        timestamp: "2 dias atrás"
+      },
+      {
+        id: "m_302",
+        sender: "bot",
+        channel: "instagram",
+        text: "Oi Bia! Notamos que seu cupom exclusivo de 20% OFF expira em breve. Gostaria que eu reservasse suas peças?",
+        timestamp: "Há 52 horas"
+      }
+    ]
+  },
+  {
+    id: "demo_conv_4",
+    contactId: "demo_c_6",
+    contact: {
+      id: "demo_c_6",
+      name: "Gabriel Siqueira",
+      username: "gabriel.siqueira",
+      channel: "messenger",
+      avatarUrl: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&auto=format&fit=crop&q=80",
+      email: "gabriel@comercial.com",
+      phone: "+55 (51) 99345-6006",
+      tags: ["Cliente-VIP", "Negociacao-Enterprise"],
+      customFields: { plano: "Enterprise" },
+      status: "active",
+      createdAt: new Date(Date.now() - 86400000 * 20).toISOString(),
+      lastInteractionAt: "Há 4 dias",
+      totalInteractions: 12,
+      leadScore: 92
+    },
+    channel: "messenger",
+    status: "human_takeover",
+    unreadCount: 0,
+    isBotActive: false,
+    lastMessage: {
+      text: "Gabriel, o contrato revisado com a cláusula de SLA já está pronto para assinatura. Podemos alinhar hoje?",
+      timestamp: "Há 4 dias",
+      sender: "agent"
+    },
+    messages: [
+      {
+        id: "m_401",
+        sender: "user",
+        channel: "messenger",
+        text: "Nossa diretoria aprovou o orçamento, só falta ajustar a cláusula de SLA.",
+        timestamp: "4 dias atrás"
+      },
+      {
+        id: "m_402",
+        sender: "agent",
+        channel: "messenger",
+        text: "Gabriel, o contrato revisado com a cláusula de SLA já está pronto para assinatura. Podemos alinhar hoje?",
+        timestamp: "Há 4 dias"
+      }
+    ]
+  },
+  {
+    id: "demo_conv_5",
+    contactId: "demo_c_4",
+    contact: {
+      id: "demo_c_4",
+      name: "Lucas Albuquerque",
+      username: "lucas_albuquerque_fit",
+      channel: "instagram",
+      avatarUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80",
+      email: "lucas@fitnessprime.com",
+      phone: "+55 (31) 99876-4004",
+      tags: ["Interesse-Treino", "Lead-Novo"],
+      customFields: {},
+      status: "active",
+      createdAt: new Date(Date.now() - 86400000 * 1).toISOString(),
+      lastInteractionAt: "Há 40 min",
+      totalInteractions: 3,
+      leadScore: 45
+    },
+    channel: "instagram",
+    status: "open",
+    unreadCount: 1,
+    isBotActive: true,
+    lastMessage: {
+      text: "Qual é o valor da assinatura mensal do aplicativo?",
+      timestamp: "Há 40 min",
+      sender: "user"
+    },
+    messages: [
+      {
+        id: "m_501",
+        sender: "user",
+        channel: "instagram",
+        text: "Qual é o valor da assinatura mensal do aplicativo?",
+        timestamp: "Há 40 min"
+      }
+    ]
   }
 ];
+
+export const INITIAL_CONVERSATIONS: LiveConversation[] = [...DEMO_CONVERSATIONS];
 
 export const INITIAL_KNOWLEDGE_BASE: BotKnowledgeBase = {
   companyName: "Minha Empresa",

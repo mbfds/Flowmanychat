@@ -29,7 +29,8 @@ import {
   PlusCircle,
   Copy,
   Check,
-  Code
+  Code,
+  Smartphone
 } from 'lucide-react';
 import { ActivityLog, ActivityLogCategory, ActivityLogStatus } from '../../types';
 
@@ -47,7 +48,65 @@ export const ActivityLogsViewer: React.FC = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Initial mock logs to display if backend is empty
-  const initialFallbackLogs: ActivityLog[] = [];
+  const initialFallbackLogs: ActivityLog[] = [
+    {
+      id: 'log_act_ptz_1',
+      userId: 'usr_super_1',
+      userName: 'Administrador Principal',
+      userEmail: 'admin@manyflow.com',
+      userRole: 'Super Admin',
+      tenantId: 'tenant_main',
+      category: 'postiz',
+      action: 'postiz.post_published',
+      title: 'Post Multi-Plataforma Publicado com Sucesso',
+      description: 'Vídeo Reel/Short publicado no Instagram, TikTok e Facebook. Automação de comentários ativada no ManyFlow.',
+      entityType: 'postiz',
+      entityName: 'Campanha Lançamento Recurso IA 2026',
+      ipAddress: '189.44.112.50',
+      userAgent: 'Mozilla/5.0 ManyFlow Client',
+      status: 'success',
+      metadata: { platforms: ['instagram', 'tiktok', 'facebook'], reach: 4820 },
+      createdAt: new Date(Date.now() - 3600000 * 3).toISOString()
+    },
+    {
+      id: 'log_act_sms_1',
+      userId: 'usr_super_1',
+      userName: 'Sistema ManyFlow (Gateway)',
+      userEmail: 'system@manyflow.com',
+      userRole: 'Sistema Autônomo',
+      tenantId: 'tenant_main',
+      category: 'httpsms',
+      action: 'httpsms.delivery_confirmed',
+      title: 'SMS Transacional Entregue com Sucesso',
+      description: 'Notificação de agendamento entregue para +55 11 99882-1100 via chip SIM 1 (Vivo 5G). Latência: 410ms.',
+      entityType: 'httpsms',
+      entityName: 'Disparo de Confirmação Demo',
+      ipAddress: '192.168.1.105',
+      userAgent: 'HttpSMS-Android-Gateway/1.8.2',
+      status: 'success',
+      metadata: { device: 'Samsung Galaxy S22 Ultra', battery: 91, simSlot: 1 },
+      createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
+    },
+    {
+      id: 'log_act_flw_1',
+      userId: 'usr_super_1',
+      userName: 'Administrador Principal',
+      userEmail: 'admin@manyflow.com',
+      userRole: 'Super Admin',
+      tenantId: 'tenant_main',
+      category: 'flow',
+      action: 'flow.updated',
+      title: 'Ação de SMS HttpSMS Integrada ao Fluxo',
+      description: 'Configurado disparo automático de SMS com fallback no nó de Ação do Fluxo Principal de Vendas.',
+      entityType: 'flow',
+      entityName: 'Funil de Alta Conversão',
+      ipAddress: '187.54.120.45',
+      userAgent: 'Mozilla/5.0 Chrome/120',
+      status: 'info',
+      metadata: { actionType: 'send_sms_httpsms' },
+      createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
+    }
+  ];
 
   const fetchLogs = async () => {
     try {
@@ -112,6 +171,24 @@ export const ActivityLogsViewer: React.FC = () => {
         description: 'Endpoint https://api.crm-parceiro.com/webhooks testado com latência de 142ms.',
         entityType: 'webhook' as const,
         entityName: 'Webhook CRM Parceiro',
+        status: 'success' as ActivityLogStatus
+      },
+      {
+        category: 'postiz' as ActivityLogCategory,
+        action: 'postiz.post_scheduled',
+        title: 'Agendou Post Multi-Redes via Postiz',
+        description: 'Post agendado para Instagram, TikTok e LinkedIn com vinculação direta à ferramenta de comentários ManyFlow.',
+        entityType: 'postiz' as const,
+        entityName: 'Campanha Black Friday Teaser',
+        status: 'success' as ActivityLogStatus
+      },
+      {
+        category: 'httpsms' as ActivityLogCategory,
+        action: 'httpsms.broadcast_dispatched',
+        title: 'Disparo de SMS via Gateway Android Concluído',
+        description: 'Lote de 250 SMS entregue aos destinatários através do chip SIM 1 (Vivo 5G) sem falhas de rede.',
+        entityType: 'httpsms' as const,
+        entityName: 'Disparo SMS VIP 2026',
         status: 'success' as ActivityLogStatus
       }
     ];
@@ -244,6 +321,10 @@ export const ActivityLogsViewer: React.FC = () => {
         return { label: 'Agente IA', icon: Sparkles, bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' };
       case 'contacts':
         return { label: 'Contatos / CRM', icon: UserIcon, bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' };
+      case 'postiz':
+        return { label: 'Postiz Social', icon: Calendar, bg: 'bg-fuchsia-50', text: 'text-fuchsia-700', border: 'border-fuchsia-200' };
+      case 'httpsms':
+        return { label: 'SMS Gateway', icon: Smartphone, bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200' };
       case 'settings':
         return { label: 'Configurações', icon: Settings, bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
       default:
@@ -445,6 +526,8 @@ export const ActivityLogsViewer: React.FC = () => {
               <option value="team">👥 Equipe & Permissões</option>
               <option value="meta_app">📘 Apps Meta / Facebook</option>
               <option value="contacts">👤 Contatos & CRM</option>
+              <option value="postiz">📅 Postiz Social Planner</option>
+              <option value="httpsms">📱 HttpSMS Gateway (GSM)</option>
               <option value="ai_agent">✨ Agente IA Gemini</option>
               <option value="settings">⚙️ Configurações Gerais</option>
             </select>

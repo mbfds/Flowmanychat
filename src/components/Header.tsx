@@ -13,6 +13,7 @@ import {
   Users, 
   Send, 
   MessageCircle,
+  MessageSquare,
   Zap
 } from 'lucide-react';
 import { ChannelType, Flow, NavigationTab } from '../types';
@@ -51,6 +52,8 @@ export const Header: React.FC<HeaderProps> = ({
         return 'Gatilhos por Palavra-Chave & Regras';
       case 'comment_tools':
         return 'Automação de Comentário ➔ Direct';
+      case 'postiz_planner':
+        return 'Planejador de Redes Sociais & Conteúdo (Postiz)';
       case 'broadcast':
         return 'Campanhas de Transmissão (Broadcast)';
       case 'inbox':
@@ -109,9 +112,14 @@ export const Header: React.FC<HeaderProps> = ({
                 <Send className="w-3 h-3 text-sky-600 dark:text-sky-400" /> Telegram
               </span>
             )}
+            {selectedChannel === 'sms' && (
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 flex items-center gap-1">
+                <MessageSquare className="w-3 h-3 text-teal-600 dark:text-teal-400" /> SMS Gateway
+              </span>
+            )}
           </div>
           <p className="text-xs text-[#64748B] dark:text-slate-400 hidden sm:block">
-            Instagram • WhatsApp (Cloud API + Baileys) • Telegram • Facebook Messenger
+            Instagram • WhatsApp • Telegram • Facebook Messenger • SMS Gateway (HttpSMS)
           </p>
         </div>
 

@@ -24,12 +24,14 @@ import {
   Tag,
   Trophy,
   Sun,
-  LayoutDashboard
+  LayoutDashboard,
+  FileDown
 } from 'lucide-react';
 import { Flow, BroadcastCampaign, Contact, LiveConversation } from '../../types';
 import { ComponentLoader } from '../Common/ComponentLoader';
 import { PerformanceSummaryHeader } from './PerformanceSummaryHeader';
 import { DailySummaryView } from './DailySummaryView';
+import { ExportWeeklyReportModal } from './ExportWeeklyReportModal';
 
 const FlowFunnelView = lazy(() =>
   import('./FlowFunnelView').then((m) => ({ default: m.FlowFunnelView }))
@@ -66,6 +68,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   const [targetFlowForFunnel, setTargetFlowForFunnel] = useState<string>(
     selectedFlowId || flows[0]?.id || ''
   );
+  const [isExportWeeklyModalOpen, setIsExportWeeklyModalOpen] = useState(false);
 
   const totalRuns = flows.reduce((acc, f) => acc + f.stats.runs, 0);
   const totalCompleted = flows.reduce((acc, f) => acc + f.stats.completed, 0);
@@ -144,6 +147,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         conversations={conversations}
         onOpenFlow={handleInspectFunnel}
         onOpenSimulator={onOpenSimulator}
+        onOpenExportPdf={() => setIsExportWeeklyModalOpen(true)}
       />
 
       {/* Secondary Navigation Subheader */}
@@ -220,9 +224,21 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         </div>
 
         {/* Global Quick Action */}
-        <div className="flex items-center gap-2 text-xs font-semibold text-[#64748B]">
-          <span>Métricas sincronizadas com Graph API</span>
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        <div className="flex items-center gap-3">
+          <button
+            id="btn_export_weekly_report_pdf"
+            onClick={() => setIsExportWeeklyModalOpen(true)}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-[#0084FF] hover:bg-[#0073E6] flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            title="Exportar Resumo Semanal de Performance e Crescimento da Base em PDF"
+          >
+            <FileDown className="w-3.5 h-3.5" />
+            <span>Exportar Relatório Semanal (PDF)</span>
+          </button>
+
+          <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-[#64748B]">
+            <span>Métricas sincronizadas com Graph API</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          </div>
         </div>
       </div>
 
@@ -241,6 +257,7 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
             }}
             onOpenSimulator={onOpenSimulator}
             onViewDetailedAnalytics={() => setActiveAnalyticsTab('funnel')}
+            onExportWeeklyPdf={() => setIsExportWeeklyModalOpen(true)}
             onNavigateTab={onNavigateTab}
           />
         )}
@@ -555,6 +572,16 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
         )}
         </Suspense>
       </div>
+
+      {/* Export Weekly PDF Modal */}
+      <ExportWeeklyReportModal
+        isOpen={isExportWeeklyModalOpen}
+        onClose={() => setIsExportWeeklyModalOpen(false)}
+        flows={flows}
+        contacts={contacts}
+        conversations={conversations}
+        broadcasts={broadcasts}
+      />
     </div>
   );
 };

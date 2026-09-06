@@ -71,6 +71,9 @@ const AdminSubscriptionsManager = lazy(() =>
 const AdminPackagesManager = lazy(() =>
   import('./components/Admin/AdminPackagesManager').then((m) => ({ default: m.AdminPackagesManager }))
 );
+const PostizPlanner = lazy(() =>
+  import('./components/Postiz/PostizPlanner').then((m) => ({ default: m.PostizPlanner }))
+);
 
 import {
   INITIAL_FLOWS,
@@ -508,6 +511,7 @@ function MainApp() {
                   currentTab === 'triggers' ? 'Gatilhos de Palavras-Chave' : 
                   currentTab === 'appointments' ? 'Central de Agendamentos Omnichannel' :
                   currentTab === 'comment_tools' ? 'Automações de Comentários' :
+                  currentTab === 'postiz_planner' ? 'Planejador Social Multicanal (Postiz)' :
                   currentTab === 'broadcast' ? 'Campanhas de Disparo em Massa' : 
                   currentTab === 'admin_users' ? 'Gestão de Usuários (Admin)' :
                   currentTab === 'admin_subscriptions' ? 'Gestão de Mensalidades & Faturas' :
@@ -548,6 +552,15 @@ function MainApp() {
               />
             )}
 
+            {currentTab === 'postiz_planner' && (
+              <PostizPlanner
+                growthTools={growthTools}
+                onOpenCommentTool={(toolId) => {
+                  setCurrentTab('comment_tools');
+                }}
+              />
+            )}
+
             {currentTab === 'broadcast' && (
               <BroadcastView
                 broadcasts={broadcasts}
@@ -565,6 +578,8 @@ function MainApp() {
                 conversations={conversations}
                 flows={flows}
                 onUpdateConversations={setConversations}
+                contacts={contacts}
+                onUpdateContacts={handleUpdateContacts}
               />
             )}
 
@@ -659,6 +674,8 @@ function MainApp() {
                 onUpdateFlows={setFlows}
                 contacts={contacts}
                 onUpdateContacts={handleUpdateContacts}
+                conversations={conversations}
+                onUpdateConversations={setConversations}
                 triggers={triggers}
                 growthTools={growthTools}
                 broadcasts={broadcasts}

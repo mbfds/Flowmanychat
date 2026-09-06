@@ -1,4 +1,4 @@
-export type ChannelType = 'instagram' | 'messenger' | 'whatsapp' | 'telegram' | 'omnichannel';
+export type ChannelType = 'instagram' | 'messenger' | 'whatsapp' | 'telegram' | 'sms' | 'omnichannel';
 
 export type NavigationTab = 
   | 'flows' 
@@ -15,7 +15,8 @@ export type NavigationTab =
   | 'ab_testing'
   | 'admin_users'
   | 'admin_subscriptions'
-  | 'admin_packages';
+  | 'admin_packages'
+  | 'postiz_planner';
 
 export type NodeType = 'trigger' | 'message' | 'condition' | 'action' | 'ai_step' | 'delay' | 'ab_split';
 
@@ -75,11 +76,14 @@ export interface FlowNodeData {
   showTypingIndicator?: boolean;
   
   // Action properties
-  actionType?: 'add_tag' | 'remove_tag' | 'set_field' | 'human_handover' | 'notify_admin' | 'send_email';
+  actionType?: 'add_tag' | 'remove_tag' | 'set_field' | 'human_handover' | 'notify_admin' | 'send_email' | 'send_sms_httpsms';
   tagToAdd?: string;
   tagToRemove?: string;
   fieldToSet?: string;
   fieldValue?: string;
+  smsRecipientPhone?: string;
+  smsMessageText?: string;
+  smsSimSlot?: 1 | 2;
   
   // Condition properties
   conditionKey?: string;
@@ -163,6 +167,40 @@ export interface Flow {
     completed: number;
     ctr: number;
   };
+}
+
+export interface FlowVersion {
+  id: string;
+  flowId: string;
+  versionNumber?: number;
+  name: string;
+  description?: string;
+  createdAt: string;
+  createdBy?: string;
+  isAutoSave?: boolean;
+  nodes: FlowNode[];
+  connections: FlowConnection[];
+  nodeCount: number;
+  connectionCount: number;
+  source?: 'mongodb' | 'local';
+}
+
+export interface FlowAuditOrphanNode {
+  node: FlowNode;
+  incomingCount: number;
+  outgoingCount: number;
+  isCompletelyOrphan: boolean; // 0 in, 0 out
+  isDeadEnd: boolean;         // >0 in, 0 out (non-end node)
+  isUnreachable: boolean;     // 0 in, >0 out (non-trigger)
+  reason: string;
+}
+
+export interface FlowAuditReport {
+  totalNodes: number;
+  totalConnections: number;
+  orphanNodes: FlowAuditOrphanNode[];
+  hasIssues: boolean;
+  score: number; // 0 to 100
 }
 
 export interface KeywordTrigger {
@@ -259,7 +297,9 @@ export type ContactActivityType =
   | 'story_reply_triggered'
   | 'broadcast_received' 
   | 'status_changed' 
-  | 'note_added';
+  | 'note_added'
+  | 'lead_created'
+  | 'sms_received';
 
 export interface ContactActivityLog {
   id: string;
@@ -335,6 +375,52 @@ export interface CustomFieldDefinition {
   crmPlatformPreset?: 'generic' | 'rd_station' | 'hubspot' | 'active_campaign' | 'salesforce' | 'pipedrive';
   normalizationRule?: 'none' | 'lowercase' | 'uppercase' | 'digits_only' | 'trim';
   createdAt: string;
+}
+
+export interface SystemVariable {
+  id: string;
+  key: string;              // e.g. "business_hours", "default_currency", "timezone"
+  name: string;             // e.g. "Horário de Atendimento", "Moeda Padrão", "Fuso Horário"
+  value: string;            // e.g. "Segunda a Sexta, das 09:00 às 18:00", "BRL (R$)", "America/Sao_Paulo (GMT-3)"
+  category: 'operations' | 'finance' | 'contact' | 'brand' | 'custom';
+  type: 'text' | 'time_range' | 'currency' | 'timezone' | 'email' | 'phone' | 'url' | 'number' | 'boolean';
+  description?: string;
+  isSystemDefault?: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutoTaggingRule {
+  id: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  keywords: string[];                 // Words or phrases to match (e.g. ['preço', 'valor', 'quanto custa'])
+  matchType: 'contains' | 'exact' | 'regex'; // Match condition
+  tagsToAdd: string[];                // Tags automatically applied to contact
+  tagsToRemove?: string[];            // Tags optionally removed from contact
+  channelFilter: 'all' | 'instagram' | 'messenger'; // Scope of detection
+  caseSensitive?: boolean;
+  priority?: 'high' | 'medium' | 'low';
+  timesTriggered: number;
+  lastTriggeredAt?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface AutoTaggingExecutionLog {
+  id: string;
+  ruleId: string;
+  ruleName: string;
+  contactId: string;
+  contactName: string;
+  contactUsername: string;
+  channel: 'instagram' | 'messenger';
+  matchedKeyword: string;
+  tagsAdded: string[];
+  tagsRemoved?: string[];
+  messageSnippet: string;
+  executedAt: string;
 }
 
 export interface Contact {
@@ -476,7 +562,7 @@ export interface BroadcastRecipient {
   contactId: string;
   contactName: string;
   username: string;
-  channel: 'instagram' | 'messenger';
+  channel: 'instagram' | 'messenger' | 'whatsapp' | 'sms';
   status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
   deliveredAt?: string;
   errorMessage?: string;
@@ -488,7 +574,7 @@ export interface BroadcastCampaign {
   broadcastType?: BroadcastType; // 'standard' or 'utility' (Aquele que precisa aprovar)
   utilityTemplateId?: string; // ID of approved template if utility
   metaApprovalStatus?: MetaApprovalStatus;
-  channel: 'instagram' | 'messenger' | 'omnichannel';
+  channel: 'instagram' | 'messenger' | 'omnichannel' | 'whatsapp' | 'sms';
   status: BroadcastStatus;
   messageText: string;
   mediaUrl?: string;
@@ -1707,7 +1793,7 @@ export interface BlacklistedMember {
 // --- ACTIVITY LOGS (AUDIT TRAIL) TYPES ---
 // ============================================================================
 
-export type ActivityLogCategory = 'flow' | 'broadcast' | 'webhook' | 'team' | 'meta_app' | 'settings' | 'contacts' | 'ai_agent' | 'auth';
+export type ActivityLogCategory = 'flow' | 'broadcast' | 'webhook' | 'team' | 'meta_app' | 'settings' | 'contacts' | 'ai_agent' | 'auth' | 'postiz' | 'httpsms';
 export type ActivityLogStatus = 'success' | 'warning' | 'error' | 'info';
 
 export interface ActivityLog {
@@ -1722,7 +1808,7 @@ export interface ActivityLog {
   action: string; // e.g. "flow.updated", "broadcast.sent", "webhook.created"
   title: string; // e.g. "Fluxo 'Black Friday 2026' atualizado"
   description: string; // e.g. "Adicionou nó de Mensagem e configurou teste A/B com 50% de tráfego"
-  entityType?: 'flow' | 'broadcast' | 'webhook' | 'user' | 'contact' | 'facebook_app' | 'domain' | 'settings';
+  entityType?: 'flow' | 'broadcast' | 'webhook' | 'user' | 'contact' | 'facebook_app' | 'domain' | 'settings' | 'postiz' | 'httpsms';
   entityId?: string;
   entityName?: string;
   ipAddress?: string;
@@ -2052,6 +2138,137 @@ export interface AppointmentService {
   active: boolean;
   color: string;
 }
+
+// ============================================================================
+// --- POSTIZ (gitroomhq/postiz-app) INTEGRATION TYPES ---
+// ============================================================================
+
+export type PostizSocialPlatform = 
+  | 'instagram' 
+  | 'facebook' 
+  | 'tiktok' 
+  | 'x' 
+  | 'linkedin' 
+  | 'pinterest' 
+  | 'threads' 
+  | 'youtube';
+
+export type PostizPostType = 'post' | 'reel' | 'story' | 'carousel' | 'short' | 'tweet';
+
+export type PostizPostStatus = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed';
+
+export interface PostizSocialAccount {
+  id: string;
+  platform: PostizSocialPlatform;
+  username: string;
+  displayName: string;
+  avatarUrl: string;
+  isConnected: boolean;
+  followerCount?: number;
+  profileUrl?: string;
+  accountType?: 'creator' | 'business' | 'personal';
+}
+
+export interface PostizScheduledPost {
+  id: string;
+  caption: string;
+  mediaUrls: string[];
+  mediaType: 'image' | 'video' | 'mixed' | 'text_only';
+  platforms: PostizSocialPlatform[];
+  postType: PostizPostType;
+  scheduledAt: string; // ISO string
+  publishedAt?: string;
+  status: PostizPostStatus;
+  firstComment?: string;
+  bindGrowthToolId?: string; // Automatically bind to ManyFlow Comment Direct tool!
+  tags: string[];
+  analytics?: {
+    likes: number;
+    comments: number;
+    shares: number;
+    clicks: number;
+    reach: number;
+  };
+  error?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PostizConfig {
+  apiUrl: string;           // e.g. "http://localhost:5200" or custom server
+  selfHostedUrl?: string;   // URL da instância auto-hospedada (ex: https://postiz.minhaempresa.com)
+  apiKey: string;
+  accessToken?: string;     // Token de acesso / Bearer da instância Postiz gitroomhq
+  workspaceId: string;
+  isConnected: boolean;
+  autoSyncComments: boolean;
+  syncScheduleEnabled?: boolean;
+  autoSyncIntervalMinutes?: number; // 5, 15, 30, 60
+  defaultPlatforms: PostizSocialPlatform[];
+  lastSyncedAt?: string;
+  serverVersion?: string;
+  syncStatus?: 'connected' | 'error' | 'syncing' | 'disconnected';
+}
+
+// ============================================================================
+// --- HTTPSMS (NdoleStudio/httpsms) SMS GATEWAY INTEGRATION TYPES ---
+// ============================================================================
+
+export type HttpSmsMessageStatus = 'PENDING' | 'SENT' | 'DELIVERED' | 'FAILED';
+export type HttpSmsDirection = 'outbound' | 'inbound';
+export type HttpSmsNetworkType = 'WIFI' | 'LTE_4G' | '5G' | 'OFFLINE';
+
+export interface HttpSmsDeviceStatus {
+  isConnected: boolean;
+  deviceName: string; // e.g. "Samsung Galaxy S22 (Android 14)"
+  batteryLevel: number; // 0 - 100
+  isBatteryCharging: boolean;
+  networkType: HttpSmsNetworkType;
+  signalStrength: number; // 1 to 5 bars
+  activeSimSlot: 1 | 2;
+  sim1Number: string; // e.g. "+55 11 98765-4321"
+  sim1Carrier: string; // e.g. "Vivo"
+  sim2Number?: string;
+  sim2Carrier?: string;
+  lastHeartbeat: string;
+  appVersion: string; // e.g. "v1.8.2"
+}
+
+export interface HttpSmsConfig {
+  gatewayUrl: string; // e.g. "https://api.httpsms.com/v1" or self-hosted Go backend
+  apiKey: string;
+  defaultSenderNumber: string;
+  webhookUrl: string;
+  defaultSimSlot: 1 | 2;
+  retryAttempts: number;
+  delayBetweenMessagesSeconds: number;
+  isEnabled: boolean;
+  autoSyncWithLiveChat: boolean;
+  // CRM Forwarding & Automation Options
+  forwardInboundToCrm: boolean;
+  crmAutoCreateLead: boolean;
+  crmDefaultTag: string;
+  crmLeadStage: string;
+  crmNotifyResponsible: boolean;
+  crmWebhookForwardUrl?: string;
+  crmAssignToUserId?: string;
+  forwardedToCrmCount?: number;
+}
+
+export interface HttpSmsMessage {
+  id: string;
+  direction: HttpSmsDirection;
+  from: string;
+  to: string;
+  content: string;
+  status: HttpSmsMessageStatus;
+  simSlot: 1 | 2;
+  failureReason?: string;
+  timestamp: string;
+  contactId?: string;
+  contactName?: string;
+}
+
 
 
 

@@ -15,7 +15,8 @@ import {
   Calendar,
   Layers,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  FileDown
 } from 'lucide-react';
 import { Flow, Contact, LiveConversation } from '../../types';
 
@@ -26,6 +27,7 @@ interface DailySummaryViewProps {
   onOpenFlow?: (flowId: string) => void;
   onOpenSimulator?: (flowId?: string) => void;
   onViewDetailedAnalytics?: () => void;
+  onExportWeeklyPdf?: () => void;
   onNavigateTab?: (tab: string) => void;
 }
 
@@ -36,6 +38,7 @@ export const DailySummaryView: React.FC<DailySummaryViewProps> = ({
   onOpenFlow,
   onOpenSimulator,
   onViewDetailedAnalytics,
+  onExportWeeklyPdf,
   onNavigateTab
 }) => {
   // 1. Critical Metric 1: Pending Conversations
@@ -102,18 +105,32 @@ export const DailySummaryView: React.FC<DailySummaryViewProps> = ({
             </p>
           </div>
 
-          {/* Quick toggle to Detailed Funnel View if needed */}
-          {onViewDetailedAnalytics && (
-            <button
-              id="btn_switch_to_detailed_analytics"
-              onClick={onViewDetailedAnalytics}
-              className="self-start sm:self-auto px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-2xs flex items-center gap-2 transition-all cursor-pointer group"
-            >
-              <BarChart2 className="w-4 h-4 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
-              <span>Visão Detalhada & Funis</span>
-              <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
-            </button>
-          )}
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {onExportWeeklyPdf && (
+              <button
+                id="btn_daily_summary_export_pdf"
+                onClick={onExportWeeklyPdf}
+                className="px-3.5 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-xs font-bold text-[#0084FF] dark:text-blue-400 shadow-2xs flex items-center gap-2 transition-all cursor-pointer"
+                title="Exportar Resumo Semanal de Performance e Crescimento da Base em PDF"
+              >
+                <FileDown className="w-4 h-4 text-[#0084FF] dark:text-blue-400" />
+                <span>Exportar PDF Semanal</span>
+              </button>
+            )}
+
+            {/* Quick toggle to Detailed Funnel View if needed */}
+            {onViewDetailedAnalytics && (
+              <button
+                id="btn_switch_to_detailed_analytics"
+                onClick={onViewDetailedAnalytics}
+                className="px-3.5 py-2 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-2xs flex items-center gap-2 transition-all cursor-pointer group"
+              >
+                <BarChart2 className="w-4 h-4 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                <span>Visão Detalhada & Funis</span>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 3 Critical Cards Grid */}

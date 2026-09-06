@@ -32,7 +32,8 @@ import {
   Film,
   Image as ImageIcon
 } from 'lucide-react';
-import { FlowNode, FlowButton, QuickReply, NodeType, CustomFieldDefinition, MessageVariant } from '../../types';
+import { FlowNode, FlowButton, QuickReply, NodeType, CustomFieldDefinition, MessageVariant, SystemVariable } from '../../types';
+import { getSystemVariables, interpolateSystemVariables } from '../../utils/systemVariables';
 
 interface NodeInspectorDrawerProps {
   node: FlowNode | null;
@@ -103,6 +104,8 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
   const [tagToRemove, setTagToRemove] = useState(node.data.tagToRemove || '');
   const [fieldToSet, setFieldToSet] = useState(node.data.fieldToSet || (customFields[0]?.key || 'preferencia'));
   const [fieldValue, setFieldValue] = useState(node.data.fieldValue || '');
+  const [smsRecipientPhone, setSmsRecipientPhone] = useState(node.data.smsRecipientPhone || '{phone}');
+  const [smsMessageText, setSmsMessageText] = useState(node.data.smsMessageText || 'Olá {first_name}, sua solicitação foi recebida!');
   const [actionType, setActionType] = useState(node.data.actionType || 'add_tag');
   const [aiPrompt, setAiPrompt] = useState(node.data.aiPrompt || '');
   const [keywords, setKeywords] = useState<string[]>(node.data.keywords || []);
@@ -132,9 +135,22 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
   const [minSampleSize, setMinSampleSize] = useState(node.data.minSampleSize || 200);
 
   // Variable selector UI state
-  const [variableCategory, setVariableCategory] = useState<'all' | 'custom' | 'standard'>('all');
+  const [variableCategory, setVariableCategory] = useState<'all' | 'custom' | 'standard' | 'system'>('all');
   const [variableSearch, setVariableSearch] = useState('');
   const [showPreview, setShowPreview] = useState(true);
+  const [systemVariables, setSystemVariables] = useState<SystemVariable[]>(() => getSystemVariables());
+
+  React.useEffect(() => {
+    const handleVarsUpdated = (e: any) => {
+      if (e.detail) {
+        setSystemVariables(e.detail);
+      } else {
+        setSystemVariables(getSystemVariables());
+      }
+    };
+    window.addEventListener('manyflow_system_variables_updated', handleVarsUpdated);
+    return () => window.removeEventListener('manyflow_system_variables_updated', handleVarsUpdated);
+  }, []);
 
   // Standard Meta/Instagram default variables
   const STANDARD_VARIABLES = [
@@ -363,6 +379,8 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
         tagToRemove,
         fieldToSet,
         fieldValue,
+        smsRecipientPhone,
+        smsMessageText,
         actionType,
         aiPrompt,
         triggerType,
@@ -403,6 +421,8 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
       result = result.replace(reg, cf.defaultValue || cf.name);
     });
 
+    result = interpolateSystemVariables(result, systemVariables);
+
     return result;
   };
 
@@ -417,6 +437,13 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
     (sv) =>
       sv.label.toLowerCase().includes(variableSearch.toLowerCase()) ||
       sv.key.toLowerCase().includes(variableSearch.toLowerCase())
+  );
+
+  const filteredSystem = systemVariables.filter(
+    (sv) =>
+      sv.name.toLowerCase().includes(variableSearch.toLowerCase()) ||
+      sv.key.toLowerCase().includes(variableSearch.toLowerCase()) ||
+      sv.value.toLowerCase().includes(variableSearch.toLowerCase())
   );
 
   return (
@@ -892,44 +919,55 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
 
                 {/* Filter / Category Selector */}
                 <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-purple-200 text-[10px] font-bold">
+                  <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-purple-200 text-[10px] font-bold overflow-x-auto">
                     <button
                       type="button"
                       onClick={() => setVariableCategory('all')}
-                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer whitespace-nowrap ${
                         variableCategory === 'all'
                           ? 'bg-purple-100 text-purple-900'
                           : 'text-[#64748B] hover:text-purple-700'
                       }`}
                     >
-                      Todas ({customFields.length + STANDARD_VARIABLES.length})
+                      Todas ({customFields.length + STANDARD_VARIABLES.length + systemVariables.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVariableCategory('system')}
+                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer whitespace-nowrap ${
+                        variableCategory === 'system'
+                          ? 'bg-blue-100 text-blue-900'
+                          : 'text-[#64748B] hover:text-blue-700'
+                      }`}
+                    >
+                      Sistema ({systemVariables.length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setVariableCategory('custom')}
-                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer whitespace-nowrap ${
                         variableCategory === 'custom'
                           ? 'bg-purple-100 text-purple-900'
                           : 'text-[#64748B] hover:text-purple-700'
                       }`}
                     >
-                      Personalizadas ({customFields.length})
+                      Campos Lead ({customFields.length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setVariableCategory('standard')}
-                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      className={`px-2 py-0.5 rounded transition-colors cursor-pointer whitespace-nowrap ${
                         variableCategory === 'standard'
                           ? 'bg-purple-100 text-purple-900'
                           : 'text-[#64748B] hover:text-purple-700'
                       }`}
                     >
-                      Meta / Padrão (3)
+                      Padrão (3)
                     </button>
                   </div>
 
                   {/* Search Mini Input */}
-                  <div className="relative w-28 sm:w-36">
+                  <div className="relative w-24 sm:w-32 shrink-0">
                     <Search className="w-3 h-3 text-purple-400 absolute left-2 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
@@ -942,7 +980,22 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
                 </div>
 
                 {/* Variable Chips Grid */}
-                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto pr-1">
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto pr-1">
+                  {/* System Variables (Global constants) */}
+                  {(variableCategory === 'all' || variableCategory === 'system') &&
+                    filteredSystem.map((sv) => (
+                      <button
+                        key={sv.key}
+                        type="button"
+                        onClick={() => insertVariable(`{{system.${sv.key}}}`)}
+                        title={`${sv.name}: "${sv.value}"`}
+                        className="px-2 py-1 text-[11px] font-mono font-bold rounded-md bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 hover:border-blue-300 transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+                      >
+                        <span className="text-blue-600 font-sans font-normal text-[10px]">{sv.name}:</span>
+                        <span>{`{{system.${sv.key}}}`}</span>
+                      </button>
+                    ))}
+
                   {/* Standard Variables */}
                   {(variableCategory === 'all' || variableCategory === 'standard') &&
                     filteredStandard.map((v) => (
@@ -951,9 +1004,9 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
                         type="button"
                         onClick={() => insertVariable(v.tag)}
                         title={`${v.desc} (ex: ${v.example})`}
-                        className="px-2 py-1 text-[11px] font-mono font-bold rounded-md bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 hover:border-blue-300 transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
+                        className="px-2 py-1 text-[11px] font-mono font-bold rounded-md bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 hover:border-slate-300 transition-all shadow-2xs flex items-center gap-1 cursor-pointer"
                       >
-                        <span className="text-blue-500 font-sans font-normal text-[10px]">{v.label}:</span>
+                        <span className="text-slate-500 font-sans font-normal text-[10px]">{v.label}:</span>
                         <span>{v.tag}</span>
                       </button>
                     ))}
@@ -973,7 +1026,7 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
                       </button>
                     ))}
 
-                  {filteredCustom.length === 0 && filteredStandard.length === 0 && (
+                  {filteredCustom.length === 0 && filteredStandard.length === 0 && filteredSystem.length === 0 && (
                     <span className="text-[11px] text-[#64748B] italic py-1">
                       Nenhuma variável encontrada para "{variableSearch}"
                     </span>
@@ -1235,6 +1288,7 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
                 <option value="add_tag">🏷️ Atribuir Tag (Adicionar Tag ao Contato)</option>
                 <option value="remove_tag">❌ Remover Tag do Contato</option>
                 <option value="set_field">📝 Salvar / Atualizar Campo Customizado</option>
+                <option value="send_sms_httpsms">📱 Disparar SMS via HttpSMS (Gateway Android)</option>
                 <option value="human_handover">👨‍💼 Transferir para Atendente Humano</option>
               </select>
             </div>
@@ -1345,6 +1399,55 @@ export const NodeInspectorDrawer: React.FC<NodeInspectorDrawerProps> = ({
                     placeholder="Ex: Moda Feminina, 25/12/1990, VIP..."
                     className="w-full px-3 py-2 rounded-lg bg-white border border-purple-200 text-xs text-[#1A1D21]"
                   />
+                </div>
+              </div>
+            )}
+
+            {actionType === 'send_sms_httpsms' && (
+              <div className="space-y-3 p-3.5 bg-teal-50/70 border border-teal-200 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-teal-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📱 HttpSMS Gateway (Android GSM)</span>
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-teal-200 text-teal-800">
+                    NdoleStudio
+                  </span>
+                </div>
+                <p className="text-[11px] text-teal-800/80 leading-relaxed">
+                  Envia um SMS real através do seu smartphone Android conectado usando a API do HttpSMS quando o lead atingir este nó.
+                </p>
+
+                <div>
+                  <label className="block text-xs font-bold text-teal-950 mb-1">
+                    Telefone de Destino:
+                  </label>
+                  <input
+                    type="text"
+                    value={smsRecipientPhone}
+                    onChange={(e) => setSmsRecipientPhone(e.target.value)}
+                    placeholder="+5511999999999 ou {phone}"
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-teal-300 text-xs text-[#1A1D21] font-mono"
+                  />
+                  <span className="text-[10px] text-teal-700 mt-0.5 block">
+                    Use <code className="font-mono bg-white px-1 rounded">{'{phone}'}</code> para puxar o telefone salvo do contato.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-teal-950 mb-1">
+                    Mensagem do SMS:
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={smsMessageText}
+                    onChange={(e) => setSmsMessageText(e.target.value)}
+                    placeholder="Olá {first_name}, sua solicitação foi confirmada!"
+                    className="w-full px-3 py-2 rounded-lg bg-white border border-teal-300 text-xs text-[#1A1D21]"
+                  />
+                  <div className="flex items-center justify-between text-[10px] text-teal-700 mt-1">
+                    <span>Suporta tags como {'{first_name}'}</span>
+                    <span>{smsMessageText.length} caracteres ({Math.ceil((smsMessageText.length || 1) / 160)} SMS)</span>
+                  </div>
                 </div>
               </div>
             )}

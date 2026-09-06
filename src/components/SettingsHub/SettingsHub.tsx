@@ -45,7 +45,11 @@ import {
   Download,
   HardDrive,
   CreditCard,
-  TrendingUp
+  TrendingUp,
+  BellRing,
+  Tag,
+  Calendar,
+  Smartphone
 } from 'lucide-react';
 import { 
   BotKnowledgeBase, 
@@ -53,6 +57,7 @@ import {
   WebhookSettingsState,
   Flow,
   Contact,
+  LiveConversation,
   KeywordTrigger,
   PostCommentGrowthTool,
   BroadcastCampaign
@@ -81,6 +86,11 @@ import { AffiliateResellerHub } from './AffiliateResellerHub';
 import { McpServerHub } from './McpServerHub';
 import { WebhookStatusManager } from './WebhookStatusManager';
 import { WebhookConfigManager } from './WebhookConfigManager';
+import { SystemVariablesManager } from './SystemVariablesManager';
+import { InactiveContactsMonitoringManager } from './InactiveContactsMonitoringManager';
+import { AutoTaggingManager } from './AutoTaggingManager';
+import { PostizSettingsManager } from './PostizSettingsManager';
+import { HttpSmsManager } from './HttpSmsManager';
 
 interface SettingsHubProps {
   knowledgeBase: BotKnowledgeBase;
@@ -93,6 +103,8 @@ interface SettingsHubProps {
   onUpdateFlows?: (flows: Flow[]) => void;
   contacts?: Contact[];
   onUpdateContacts?: (contacts: Contact[]) => void;
+  conversations?: LiveConversation[];
+  onUpdateConversations?: (conversations: LiveConversation[]) => void;
   triggers?: KeywordTrigger[];
   growthTools?: PostCommentGrowthTool[];
   broadcasts?: BroadcastCampaign[];
@@ -104,16 +116,21 @@ interface SettingsHubProps {
 // Available tabs across standard and tech modes
 type SettingsTab = 
   | 'channels' 
+  | 'postiz_settings'
+  | 'httpsms'
   | 'webhook_status'
   | 'external_webhooks'
   | 'webhook_config'
   | 'webhook_logs'
+  | 'inactive_monitoring'
+  | 'auto_tagging'
   | 'mcp'
   | 'plans'
   | 'affiliates'
   | 'team' 
   | 'backup'
   | 'meta_ai' 
+  | 'system_variables'
   | 'custom_fields' 
   | 'domains'
   // Tech tabs
@@ -132,6 +149,8 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   onUpdateFlows,
   contacts = [],
   onUpdateContacts,
+  conversations = [],
+  onUpdateConversations,
   triggers = [],
   growthTools = [],
   broadcasts = [],
@@ -314,6 +333,42 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           </span>
         </button>
 
+        {/* ESSENTIAL TAB: POSTIZ (SOCIAL PLANNER & AUTOMAÇÕES) */}
+        <button
+          id="tab_settings_postiz"
+          onClick={() => setActiveTab('postiz_settings')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'postiz_settings'
+              ? 'border-purple-600 text-purple-900 bg-purple-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Calendar className="w-4 h-4 text-purple-600" />
+          <span>Postiz (Social Planner)</span>
+          <span className="px-2 py-0.2 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 flex items-center gap-1 border border-purple-200">
+            <Sparkles className="w-2.5 h-2.5" />
+            gitroomhq
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB: HTTPSMS GATEWAY ANDROID */}
+        <button
+          id="tab_settings_httpsms"
+          onClick={() => setActiveTab('httpsms')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'httpsms'
+              ? 'border-emerald-600 text-emerald-900 bg-emerald-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Smartphone className="w-4 h-4 text-emerald-600" />
+          <span>Gateway SMS (HttpSMS)</span>
+          <span className="px-2 py-0.2 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 flex items-center gap-1 border border-emerald-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Android GSM
+          </span>
+        </button>
+
         {/* ESSENTIAL TAB: STATUS DE CONEXÃO DOS WEBHOOKS (VERIFICADO / PENDENTE) */}
         <button
           id="tab_settings_webhook_status"
@@ -486,6 +541,58 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
         >
           <Users className="w-4 h-4 text-indigo-600" />
           <span>Equipe & Acessos</span>
+        </button>
+
+        {/* ESSENTIAL TAB: VARIÁVEIS GLOBAIS DO SISTEMA */}
+        <button
+          id="tab_settings_system_variables"
+          onClick={() => setActiveTab('system_variables')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'system_variables'
+              ? 'border-blue-600 text-blue-900 bg-blue-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Sliders className="w-4 h-4 text-blue-600" />
+          <span>Variáveis Globais</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-blue-100 text-blue-800">
+            Fluxos
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB: REGRAS DE MONITORAMENTO DE INATIVIDADE (EMAIL & SLACK) */}
+        <button
+          id="tab_settings_inactive_monitoring"
+          onClick={() => setActiveTab('inactive_monitoring')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'inactive_monitoring'
+              ? 'border-amber-600 text-amber-900 bg-amber-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <BellRing className="w-4 h-4 text-amber-600" />
+          <span>Monitor de Inatividade</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-200">
+            Email &amp; Slack
+          </span>
+        </button>
+
+        {/* ESSENTIAL TAB: AUTO-TAGGING POR PALAVRA-CHAVE */}
+        <button
+          id="tab_settings_auto_tagging"
+          onClick={() => setActiveTab('auto_tagging')}
+          className={`pb-3 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === 'auto_tagging'
+              ? 'border-indigo-600 text-indigo-900 bg-indigo-50/70 rounded-t-xl font-black'
+              : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-t-lg'
+          }`}
+        >
+          <Tag className="w-4 h-4 text-indigo-600" />
+          <span>Auto-Tagging (Palavras-chave)</span>
+          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            CRM
+          </span>
         </button>
 
         {/* ESSENTIAL TAB 5: CAMPOS & CRM */}
@@ -874,6 +981,29 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
       )}
 
       {/* ========================================================= */}
+      {/* ESSENTIAL TAB: POSTIZ (SOCIAL PLANNER & MULTICANAL)       */}
+      {/* ========================================================= */}
+      {activeTab === 'postiz_settings' && (
+        <div className="space-y-4">
+          <PostizSettingsManager />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* ESSENTIAL TAB: HTTPSMS GATEWAY ANDROID                    */}
+      {/* ========================================================= */}
+      {activeTab === 'httpsms' && (
+        <div className="space-y-4">
+          <HttpSmsManager
+            contacts={contacts}
+            onUpdateContacts={onUpdateContacts}
+            conversations={conversations}
+            onUpdateConversations={onUpdateConversations}
+          />
+        </div>
+      )}
+
+      {/* ========================================================= */}
       {/* ESSENTIAL TAB: STATUS DE CONEXÃO DOS WEBHOOKS             */}
       {/* ========================================================= */}
       {activeTab === 'webhook_status' && (
@@ -1138,7 +1268,43 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* 5. ESSENTIAL TAB: CAMPOS & CRM                            */}
+      {/* 5. ESSENTIAL TAB: VARIÁVEIS GLOBAIS DO SISTEMA            */}
+      {/* ========================================================= */}
+      {activeTab === 'system_variables' && (
+        <div className="space-y-4">
+          <SystemVariablesManager />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* ESSENTIAL TAB: REGRAS DE MONITORAMENTO DE INATIVIDADE      */}
+      {/* ========================================================= */}
+      {activeTab === 'inactive_monitoring' && (
+        <div className="space-y-4">
+          <InactiveContactsMonitoringManager
+            contacts={contacts}
+            flows={flows}
+          />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* ESSENTIAL TAB: AUTO-TAGGING POR PALAVRAS-CHAVE            */}
+      {/* ========================================================= */}
+      {activeTab === 'auto_tagging' && (
+        <div className="space-y-4">
+          <AutoTaggingManager
+            contacts={contacts}
+            onUpdateContacts={onUpdateContacts}
+            conversations={conversations}
+            onUpdateConversations={onUpdateConversations}
+            onOpenLiveChat={onOpenLiveChat}
+          />
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 6. ESSENTIAL TAB: CAMPOS & CRM                            */}
       {/* ========================================================= */}
       {activeTab === 'custom_fields' && (
         <div className="space-y-4">

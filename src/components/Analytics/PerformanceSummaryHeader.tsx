@@ -20,7 +20,8 @@ import {
   Radio,
   ArrowRight,
   ShieldCheck,
-  Calendar
+  Calendar,
+  FileDown
 } from 'lucide-react';
 import { Flow, BroadcastCampaign, Contact, LiveConversation } from '../../types';
 import { RecentConversionsModal, RecentConversionEvent } from './RecentConversionsModal';
@@ -32,6 +33,7 @@ interface PerformanceSummaryHeaderProps {
   conversations?: LiveConversation[];
   onOpenFlow?: (flowId?: string) => void;
   onOpenSimulator?: (flowId?: string) => void;
+  onOpenExportPdf?: () => void;
 }
 
 export const PerformanceSummaryHeader: React.FC<PerformanceSummaryHeaderProps> = ({
@@ -40,7 +42,8 @@ export const PerformanceSummaryHeader: React.FC<PerformanceSummaryHeaderProps> =
   contacts = [],
   conversations = [],
   onOpenFlow,
-  onOpenSimulator
+  onOpenSimulator,
+  onOpenExportPdf
 }) => {
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | '7d' | '30d' | 'all'>('30d');
   const [isConversionsModalOpen, setIsConversionsModalOpen] = useState(false);
@@ -257,6 +260,20 @@ export const PerformanceSummaryHeader: React.FC<PerformanceSummaryHeaderProps> =
               Tudo
             </button>
           </div>
+
+          {onOpenExportPdf && (
+            <button
+              type="button"
+              id="btn_header_export_weekly_pdf"
+              onClick={onOpenExportPdf}
+              className="py-1.5 px-3 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#0084FF] border border-blue-200 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+              title="Exportar Resumo Semanal de Performance e Crescimento da Base em PDF"
+            >
+              <FileDown className="w-3.5 h-3.5 text-[#0084FF]" />
+              <span className="hidden sm:inline">Exportar PDF Semanal</span>
+              <span className="sm:hidden">PDF</span>
+            </button>
+          )}
 
           <button
             type="button"

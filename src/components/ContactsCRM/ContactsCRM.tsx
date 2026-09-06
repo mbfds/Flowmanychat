@@ -32,7 +32,12 @@ import {
   Square,
   Sparkles,
   GitFork,
-  Check
+  Check,
+  Clock,
+  RotateCcw,
+  AlertTriangle,
+  Database,
+  UserX
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Contact, Flow, ContactNote, ContactActivityLog, LeadScoreTier } from '../../types';
@@ -43,13 +48,23 @@ import {
   DEFAULT_SCORING_RULES, 
   ScoringRuleConfig 
 } from '../../utils/leadScoring';
+import { 
+  getContactDaysInactive, 
+  formatInactivityBadge,
+  EngagementStatus,
+  getContactEngagementStatus,
+  ENGAGEMENT_CONFIG
+} from '../../utils/inactivityHelper';
+import { EngagementDonutChart } from './EngagementDonutChart';
 import { LeadScoreBreakdownModal } from './LeadScoreBreakdownModal';
 import { LeadScoringRulesModal } from './LeadScoringRulesModal';
 import { BulkActionsToolbar } from './BulkActionsToolbar';
+import { BulkActionsSidebar } from './BulkActionsSidebar';
 import { BulkAssignFlowModal } from './BulkAssignFlowModal';
 import { BulkTagModal } from './BulkTagModal';
 import { BulkAddNoteModal } from './BulkAddNoteModal';
 import { BulkStatusScoreModal } from './BulkStatusScoreModal';
+import { InactiveContactsCleanerModal } from './InactiveContactsCleanerModal';
 
 interface ContactsCRMProps {
   contacts: Contact[];
@@ -70,6 +85,8 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [selectedChannel, setSelectedChannel] = useState<string>('all');
   const [temperatureFilter, setTemperatureFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all');
+  const [engagementFilter, setEngagementFilter] = useState<'all' | EngagementStatus>('all');
+  const [inactivityFilter, setInactivityFilter] = useState<'all' | '30' | '60' | '90' | '180' | '365'>('all');
   const [sortBy, setSortBy] = useState<'score_desc' | 'score_asc' | 'recent' | 'interactions' | 'name'>('score_desc');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [drawerInitialTab, setDrawerInitialTab] = useState<'scoring' | 'activity' | 'notes' | 'details' | 'custom_fields'>('scoring');
@@ -82,6 +99,10 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
   });
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [contactForScoreBreakdown, setContactForScoreBreakdown] = useState<Contact | null>(null);
+
+  // Inactive contacts cleaner modal and undo history
+  const [isCleanerModalOpen, setIsCleanerModalOpen] = useState(false);
+  const [deletedHistory, setDeletedHistory] = useState<Contact[] | null>(null);
 
   // Bulk selection and modal states
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -134,6 +155,24 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
     return { all: contactsWithScore.length, hot, warm, cold };
   }, [contactsWithScore]);
 
+  // Inactivity statistics
+  const inactiveStats = useMemo(() => {
+    let count30 = 0;
+    let count60 = 0;
+    let count90 = 0;
+    let count180 = 0;
+    let count365 = 0;
+    contacts.forEach((c) => {
+      const days = getContactDaysInactive(c);
+      if (days >= 30) count30++;
+      if (days >= 60) count60++;
+      if (days >= 90) count90++;
+      if (days >= 180) count180++;
+      if (days >= 365) count365++;
+    });
+    return { count30, count60, count90, count180, count365 };
+  }, [contacts]);
+
   const filteredAndSortedContacts = useMemo(() => {
     const list = contactsWithScore.filter((c) => {
       const matchesSearch =
@@ -147,8 +186,16 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
       const matchesTag = selectedTag === 'all' || c.tags.includes(selectedTag);
       const matchesChannel = selectedChannel === 'all' || c.channel === selectedChannel;
       const matchesTemperature = temperatureFilter === 'all' || c.scoreTier === temperatureFilter;
+      const matchesEngagement = engagementFilter === 'all' || getContactEngagementStatus(c) === engagementFilter;
 
-      return matchesSearch && matchesTag && matchesChannel && matchesTemperature;
+      let matchesInactivity = true;
+      if (inactivityFilter !== 'all') {
+        const threshold = parseInt(inactivityFilter, 10);
+        const days = getContactDaysInactive(c);
+        matchesInactivity = days >= threshold;
+      }
+
+      return matchesSearch && matchesTag && matchesChannel && matchesTemperature && matchesEngagement && matchesInactivity;
     });
 
     return list.sort((a, b) => {
@@ -166,7 +213,7 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
           return 0;
       }
     });
-  }, [contactsWithScore, searchTerm, selectedTag, selectedChannel, temperatureFilter, sortBy]);
+  }, [contactsWithScore, searchTerm, selectedTag, selectedChannel, temperatureFilter, engagementFilter, inactivityFilter, sortBy]);
 
   // Selected Contacts List
   const selectedContacts = useMemo(() => {
@@ -306,6 +353,41 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
     handleClearSelection();
   };
 
+  const handleBulkApplyCustomField = (fieldName: string, fieldValue: string) => {
+    const cleanKey = fieldName.trim();
+    const cleanVal = fieldValue.trim();
+    if (!cleanKey) return;
+    const now = new Date().toISOString();
+
+    const updated = contacts.map((c) => {
+      if (!selectedIds.has(c.id)) return c;
+
+      const nextCustomFields = {
+        ...(c.customFields || {}),
+        [cleanKey]: cleanVal
+      };
+
+      const newLog: ContactActivityLog = {
+        id: `act_custom_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        type: 'custom_field_updated',
+        title: `Campo Customizado em Massa: "${cleanKey}" = "${cleanVal}"`,
+        description: `Atualização de atributo executada via barra lateral de ações em massa`,
+        timestamp: now,
+        actor: 'agent'
+      };
+
+      return {
+        ...c,
+        customFields: nextCustomFields,
+        activityLogs: [newLog, ...(c.activityLogs || [])]
+      };
+    });
+
+    onUpdateContacts(updated);
+    showToast(`Campo "${cleanKey}" atualizado com sucesso em ${selectedIds.size} contatos!`, 'success');
+    handleClearSelection();
+  };
+
   const handleBulkAddNote = (noteData: Omit<ContactNote, 'id' | 'createdAt'>) => {
     const now = new Date().toISOString();
 
@@ -397,6 +479,35 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
     handleClearSelection();
   };
 
+  const handleConfirmPurge = (idsToDelete: string[], daysThreshold: number) => {
+    const idsSet = new Set(idsToDelete);
+    const deleted = contacts.filter((c) => idsSet.has(c.id));
+    const remaining = contacts.filter((c) => !idsSet.has(c.id));
+
+    setDeletedHistory(deleted);
+    onUpdateContacts(remaining);
+
+    // Unselect any purged contacts
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      idsToDelete.forEach((id) => next.delete(id));
+      return next;
+    });
+
+    showToast(
+      `Base otimizada: ${deleted.length} contatos inativos (> ${daysThreshold} dias) purgados com sucesso!`,
+      'success'
+    );
+  };
+
+  const handleUndoPurge = () => {
+    if (!deletedHistory || deletedHistory.length === 0) return;
+    onUpdateContacts([...contacts, ...deletedHistory]);
+    const restoredCount = deletedHistory.length;
+    setDeletedHistory(null);
+    showToast(`${restoredCount} contatos inativos foram restaurados para a base!`, 'info');
+  };
+
   const handleExportSelectedCSV = () => {
     const targetContacts = contactsWithScore.filter((c) => selectedIds.has(c.id));
     if (targetContacts.length === 0) return;
@@ -462,6 +573,99 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
     link.click();
     link.remove();
     showToast(`${targetContacts.length} contatos exportados em formato JSON!`, 'success');
+  };
+
+  const handleExportFilteredCSV = () => {
+    if (filteredAndSortedContacts.length === 0) {
+      showToast('Nenhum contato filtrado disponível para exportação.', 'warning');
+      return;
+    }
+
+    // Dynamic extraction of all unique custom field keys across filtered contacts
+    const customFieldKeys: string[] = Array.from(
+      new Set(
+        filteredAndSortedContacts.flatMap((c) => Object.keys(c.customFields || {}))
+      )
+    );
+
+    const headers = [
+      'ID',
+      'Nome',
+      'Username',
+      'Canal',
+      'Status Atendimento',
+      'Status Engajamento',
+      'Lead Score (Pontos)',
+      'Classificacao Temperatura',
+      'Email',
+      'Telefone',
+      'Tags (Marketing)',
+      'Dias Sem Interacao',
+      'Ultima Interacao',
+      'Data de Cadastro',
+      'Total Interacoes',
+      'LTV (Valor do Cliente)',
+      'Atendente Responsavel',
+      'Notas Internas',
+      'Ultima Atividade Registrada',
+      ...customFieldKeys.map((k) => `Campo_${k.replace(/[^a-zA-Z0-9_]/g, '_')}`),
+      'Metadados_Customizados_JSON'
+    ];
+
+    const rows = filteredAndSortedContacts.map((c) => {
+      const engagement = getContactEngagementStatus(c);
+      const daysInactive = getContactDaysInactive(c);
+      const tierLabel = c.scoreTier === 'hot' ? 'Quente' : c.scoreTier === 'warm' ? 'Morno' : 'Frio';
+      const notesText = (c.internalNotes || []).map((n) => `[${n.author}: ${n.content}]`).join(' | ');
+      const latestActivity = c.activityLogs?.[0]?.title || 'Sem atividade recente';
+      const customJson = JSON.stringify(c.customFields || {});
+
+      const dynamicCols = customFieldKeys.map((k) => {
+        const val = c.customFields?.[k];
+        return val !== undefined ? `"${String(val).replace(/"/g, '""')}"` : '""';
+      });
+
+      return [
+        `"${c.id}"`,
+        `"${(c.name || '').replace(/"/g, '""')}"`,
+        `"${(c.username || '').replace(/"/g, '""')}"`,
+        `"${c.channel}"`,
+        `"${c.status}"`,
+        `"${engagement}"`,
+        c.leadScore ?? 0,
+        `"${tierLabel}"`,
+        `"${(c.email || '').replace(/"/g, '""')}"`,
+        `"${(c.phone || '').replace(/"/g, '""')}"`,
+        `"${(c.tags || []).join('; ').replace(/"/g, '""')}"`,
+        daysInactive,
+        `"${c.lastInteractionAt || ''}"`,
+        `"${c.createdAt || ''}"`,
+        c.totalInteractions ?? 0,
+        c.lifetimeValue ? `"${c.lifetimeValue.toFixed(2)}"` : '"0.00"',
+        `"${(c.assignedAgent || 'Robo ManyFlow').replace(/"/g, '""')}"`,
+        `"${notesText.replace(/"/g, '""')}"`,
+        `"${latestActivity.replace(/"/g, '""')}"`,
+        ...dynamicCols,
+        `"${customJson.replace(/"/g, '""')}"`
+      ];
+    });
+
+    // Add UTF-8 BOM so Excel, Google Sheets, HubSpot and RD Station open accents seamlessly
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute(
+      'download', 
+      `leads_filtrados_manyflow_${filteredAndSortedContacts.length}_${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast(`${filteredAndSortedContacts.length} contatos filtrados exportados para CSV com tags e metadados!`, 'success');
   };
 
   const handleExportAllCSV = () => {
@@ -536,6 +740,16 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <span className="text-xs font-semibold">{feedbackToast.message}</span>
+          {deletedHistory && (
+            <button
+              type="button"
+              onClick={handleUndoPurge}
+              className="ml-1 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Desfazer</span>
+            </button>
+          )}
           <button 
             onClick={() => setFeedbackToast(null)}
             className="text-gray-400 hover:text-white cursor-pointer ml-2"
@@ -559,11 +773,27 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
             </span>
           </div>
           <p className="text-xs text-[#64748B] mt-0.5">
-            Gerencie múltiplos leads, execute ações em lote, tags, notas internas e atribuição automática a fluxos.
+            Gerencie múltiplos leads, execute ações em lote, tags, notas internas e otimização de base inativa.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            id="btn_crm_open_cleaner"
+            type="button"
+            onClick={() => setIsCleanerModalOpen(true)}
+            className="py-2 px-3.5 rounded-lg bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Otimizar base de dados e purgar contatos inativos"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Otimizar Base</span>
+            {inactiveStats.count90 > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-white/20 text-white text-[10px] font-black">
+                {inactiveStats.count90} inativos
+              </span>
+            )}
+          </button>
+
           <button
             id="btn_crm_scoring_rules"
             onClick={() => setShowRulesModal(true)}
@@ -585,16 +815,37 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
             </button>
           )}
 
+          {/* Export Filtered Leads to CSV for Marketing */}
+          <button
+            id="btn_crm_export_filtered_csv"
+            type="button"
+            onClick={handleExportFilteredCSV}
+            className="py-2 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Exportar contatos atualmente filtrados com metadados e tags para marketing"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Exportar Filtrados ({filteredAndSortedContacts.length})</span>
+          </button>
+
           <button
             id="btn_export_leads_csv"
             onClick={handleExportAllCSV}
-            className="py-2 px-4 rounded-lg bg-white hover:bg-gray-50 border border-[#E2E8F0] text-[#1A1D21] text-xs font-semibold shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+            className="py-2 px-3.5 rounded-lg bg-white hover:bg-gray-50 border border-[#E2E8F0] text-[#1A1D21] text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Exportar todos os contatos da base em formato CSV"
           >
-            <Download className="w-4 h-4 text-[#64748B]" />
+            <Download className="w-3.5 h-3.5 text-[#64748B]" />
             <span>Exportar Tudo</span>
           </button>
         </div>
       </div>
+
+      {/* Engagement Status Donut Chart (Recharts) */}
+      <EngagementDonutChart
+        contacts={contacts}
+        activeFilter={engagementFilter}
+        onSelectFilter={setEngagementFilter}
+        onOpenOptimizer={() => setIsCleanerModalOpen(true)}
+      />
 
       {/* Temperature Quick Filter Pills */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -723,6 +974,49 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
           </select>
         </div>
 
+        {/* Engagement Status Filter */}
+        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+          <Activity className={`w-4 h-4 shrink-0 ${engagementFilter !== 'all' ? 'text-emerald-600' : 'text-[#64748B]'}`} />
+          <select
+            id="select_engagement_status_filter"
+            value={engagementFilter}
+            onChange={(e) => setEngagementFilter(e.target.value as any)}
+            className={`px-3 py-2 rounded-lg border text-xs font-semibold focus:outline-none transition-colors ${
+              engagementFilter !== 'all'
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold'
+                : 'bg-[#F8F9FB] border-[#E2E8F0] text-[#1A1D21]'
+            }`}
+          >
+            <option value="all">Engajamento: Todos</option>
+            <option value="Ativo">🟢 Ativo (≤ 30d)</option>
+            <option value="Inativo">🟡 Inativo (≥ 30d)</option>
+            <option value="Novo">🔵 Novo (≤ 7d)</option>
+            <option value="Bloqueado">🔴 Bloqueado / Opt-out</option>
+          </select>
+        </div>
+
+        {/* Inactivity Filter */}
+        <div className="flex items-center gap-1.5 w-full sm:w-auto">
+          <Clock className={`w-4 h-4 shrink-0 ${inactivityFilter !== 'all' ? 'text-rose-500' : 'text-[#64748B]'}`} />
+          <select
+            id="select_inactivity_filter"
+            value={inactivityFilter}
+            onChange={(e) => setInactivityFilter(e.target.value as any)}
+            className={`px-3 py-2 rounded-lg border text-xs font-semibold focus:outline-none transition-colors ${
+              inactivityFilter !== 'all'
+                ? 'bg-rose-50 border-rose-300 text-rose-900 font-bold'
+                : 'bg-[#F8F9FB] border-[#E2E8F0] text-[#1A1D21]'
+            }`}
+          >
+            <option value="all">Inatividade: Todas</option>
+            <option value="30">Inativos &gt; 30 dias ({inactiveStats.count30})</option>
+            <option value="60">Inativos &gt; 60 dias ({inactiveStats.count60})</option>
+            <option value="90">Inativos &gt; 90 dias ({inactiveStats.count90} - Recomendado)</option>
+            <option value="180">Inativos &gt; 180 dias ({inactiveStats.count180})</option>
+            <option value="365">Inativos &gt; 365 dias ({inactiveStats.count365})</option>
+          </select>
+        </div>
+
         {/* Sort Dropdown */}
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <ArrowUpDown className="w-4 h-4 text-[#64748B] shrink-0" />
@@ -740,25 +1034,80 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
         </div>
       </div>
 
-      {/* Bulk Actions Sticky Toolbar */}
-      <BulkActionsToolbar
-        selectedContactsCount={selectedIds.size}
-        totalFilteredCount={filteredAndSortedContacts.length}
-        totalContactsCount={contacts.length}
-        onClearSelection={handleClearSelection}
-        onSelectAllFiltered={handleSelectAllFiltered}
-        isAllFilteredSelected={isAllFilteredSelected}
-        onOpenAssignFlow={() => setIsAssignFlowModalOpen(true)}
-        onOpenManageTags={() => setIsTagModalOpen(true)}
-        onOpenAddNote={() => setIsAddNoteModalOpen(true)}
-        onOpenStatusScore={() => setIsStatusScoreModalOpen(true)}
-        onExportSelectedCSV={handleExportSelectedCSV}
-        onExportSelectedJSON={handleExportSelectedJSON}
-        onDeleteSelected={handleBulkDelete}
-      />
+      {/* Inactivity Filter Active Alert Banner */}
+      {inactivityFilter !== 'all' && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-50 via-pink-50 to-amber-50 border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-rose-500 text-white shadow-xs shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-rose-950">
+                  Filtro de Inatividade Ativo: Exibindo {filteredAndSortedContacts.length} contatos sem interação há mais de {inactivityFilter} dias
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-200 text-rose-900">
+                  Otimização de Base
+                </span>
+              </div>
+              <p className="text-[11px] text-rose-700 mt-0.5">
+                Você pode selecionar os contatos inativos abaixo para remoção manual ou utilizar o assistente de purga com regras automáticas de salvaguarda (preservando VIPs e clientes).
+              </p>
+            </div>
+          </div>
 
-      {/* Contacts Table */}
-      <div className="rounded-xl bg-white border border-[#E2E8F0] shadow-xs overflow-hidden">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleSelectAllFiltered}
+              className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 border border-rose-200 text-rose-900 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+            >
+              Selecionar ({filteredAndSortedContacts.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsCleanerModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+            >
+              <Database className="w-3.5 h-3.5" />
+              <span>Abrir Otimizador & Purga</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setInactivityFilter('all')}
+              className="text-xs text-slate-500 hover:text-slate-800 underline cursor-pointer ml-1"
+            >
+              Limpar Filtro
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main CRM Workspace Grid: Table Area + Persistent Bulk Actions Sidebar */}
+      <div className="flex flex-col lg:flex-row items-start gap-6">
+        {/* Table & Actions Area */}
+        <div className="flex-1 w-full min-w-0 space-y-4">
+          {/* Bulk Actions Sticky Toolbar */}
+          <BulkActionsToolbar
+            selectedContactsCount={selectedIds.size}
+            totalFilteredCount={filteredAndSortedContacts.length}
+            totalContactsCount={contacts.length}
+            onClearSelection={handleClearSelection}
+            onSelectAllFiltered={handleSelectAllFiltered}
+            isAllFilteredSelected={isAllFilteredSelected}
+            onOpenAssignFlow={() => setIsAssignFlowModalOpen(true)}
+            onOpenManageTags={() => setIsTagModalOpen(true)}
+            onOpenAddNote={() => setIsAddNoteModalOpen(true)}
+            onOpenStatusScore={() => setIsStatusScoreModalOpen(true)}
+            onExportSelectedCSV={handleExportSelectedCSV}
+            onExportSelectedJSON={handleExportSelectedJSON}
+            onDeleteSelected={handleBulkDelete}
+          />
+
+          {/* Contacts Table */}
+          <div className="rounded-xl bg-white border border-[#E2E8F0] shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
@@ -787,6 +1136,7 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
                 <th className="py-3 px-4">Canal</th>
                 <th className="py-3 px-4">Email / Telefone</th>
                 <th className="py-3 px-4">Tags Atribuídas</th>
+                <th className="py-3 px-4">Inatividade / Última Interação ⏳</th>
                 <th className="py-3 px-4">Histórico & Logs Bot</th>
                 <th className="py-3 px-4">Notas Internas</th>
                 <th className="py-3 px-4 text-right">Ações</th>
@@ -795,7 +1145,7 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
             <tbody className="divide-y divide-gray-100 text-[#1A1D21]">
               {filteredAndSortedContacts.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-[#64748B]">
+                  <td colSpan={10} className="py-10 text-center text-[#64748B]">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Users className="w-8 h-8 text-gray-300" />
                       <p className="text-xs font-semibold">Nenhum lead encontrado com os filtros selecionados.</p>
@@ -939,6 +1289,43 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
                         </div>
                       </td>
 
+                      {/* Inactivity / Last Interaction Column */}
+                      <td className="py-3.5 px-4 space-y-1">
+                        <div className="text-[11px] font-semibold text-[#1A1D21] flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#64748B]" />
+                          <span>{contact.lastInteractionAt || 'Sem registro'}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1">
+                          {(() => {
+                            const engagement = getContactEngagementStatus(contact);
+                            const config = ENGAGEMENT_CONFIG[engagement];
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${config.badgeBg} ${config.badgeText} ${config.border}`}>
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: config.color }} />
+                                <span>{engagement}</span>
+                              </span>
+                            );
+                          })()}
+                          {(() => {
+                            const days = getContactDaysInactive(contact);
+                            const badge = formatInactivityBadge(days);
+                            return (
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                badge.severity === 'critical'
+                                  ? 'bg-rose-100 text-rose-800 border-rose-200'
+                                  : badge.severity === 'high'
+                                  ? 'bg-orange-100 text-orange-800 border-orange-200'
+                                  : badge.severity === 'medium' || badge.severity === 'low'
+                                  ? 'bg-amber-100 text-amber-800 border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              }`}>
+                                {badge.label}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </td>
+
                       {/* Bot Activity Log Summary Column */}
                       <td className="py-3.5 px-4">
                         {logsCount > 0 ? (
@@ -1016,6 +1403,23 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
           </table>
         </div>
       </div>
+    </div>
+
+    {/* Persistent Bulk Actions Sidebar */}
+    <BulkActionsSidebar
+      selectedContacts={selectedContacts}
+      totalFilteredCount={filteredAndSortedContacts.length}
+      totalContactsCount={contacts.length}
+      onClearSelection={handleClearSelection}
+      onSelectAllFiltered={handleSelectAllFiltered}
+      isAllFilteredSelected={isAllFilteredSelected}
+      onBulkApplyTags={handleBulkApplyTags}
+      onBulkApplyCustomField={handleBulkApplyCustomField}
+      onDeleteSelected={handleBulkDelete}
+      flows={flows}
+      onBulkAssignFlow={(flowId) => handleBulkAssignFlow(flowId, false)}
+    />
+  </div>
 
       {/* Bulk Operations Modals */}
       <BulkAssignFlowModal
@@ -1082,6 +1486,14 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
           onClose={() => setShowRulesModal(false)}
         />
       )}
+
+      {/* Inactive Contacts Cleaner & Database Optimizer Modal */}
+      <InactiveContactsCleanerModal
+        isOpen={isCleanerModalOpen}
+        onClose={() => setIsCleanerModalOpen(false)}
+        contacts={contacts}
+        onConfirmPurge={handleConfirmPurge}
+      />
     </div>
   );
 };

@@ -679,6 +679,11 @@ export const BroadcastView: React.FC<BroadcastViewProps> = ({
                             <Layers className="w-3 h-3 text-purple-600" /> Omnichannel
                           </span>
                         )}
+                        {campaign.channel === 'sms' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1">
+                            <Smartphone className="w-3 h-3 text-teal-600" /> SMS Gateway
+                          </span>
+                        )}
                       </div>
 
                       {/* Title & Preview */}

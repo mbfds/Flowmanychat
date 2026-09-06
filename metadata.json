@@ -1,6 +1,6 @@
 {
-  "name": "ManyFlow - Automação Instagram & Messenger",
-  "description": "Plataforma Omnichannel de Automação com Painel do Administrador, Sistema de Afiliados e Gerenciador de Webhooks com autenticação HMAC SHA-256 e teste de conexão em tempo real.",
+  "name": "ManyFlow - Automação Omnichannel & Social",
+  "description": "Plataforma Omnichannel de Automação com Agendador Postiz (gitroomhq), Gateway SMS Android (httpsms), Flow Builder, Broadcasts, Live Chat e Auditoria completa.",
   "requestFramePermissions": [
     "microphone"
   ],

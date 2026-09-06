@@ -163,6 +163,11 @@ export const InteractiveSimulatorModal: React.FC<InteractiveSimulatorModalProps>
         setActiveTags((prev) => Array.from(new Set([...prev, 'Precisa-Atendente-Humano'])));
         addLog('action', `Atendimento transferido para Fila Humana (Bot pausado).`);
       }
+      if (node.data.actionType === 'send_sms_httpsms') {
+        const dest = interpolateMessage(node.data.smsRecipientPhone || '+55 (11) 99876-5432');
+        const smsTxt = interpolateMessage(node.data.smsMessageText || 'Olá, sua solicitação foi confirmada!');
+        addLog('action', `📱 [HttpSMS Gateway]: Disparo de SMS enviado para ${dest}: "${smsTxt}" (via Android GSM)`);
+      }
 
       // Check next default connection
       const nextConn = flow.connections.find((c) => c.fromNodeId === node.id);
