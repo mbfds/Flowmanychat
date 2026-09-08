@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ComponentLoader } from './components/Common/ComponentLoader';
+import { ErrorBoundary } from './components/Common/ErrorBoundary';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider, toast } from './context/ToastContext';
@@ -916,15 +917,21 @@ function MainApp() {
   );
 }
 
+export { ErrorBoundary };
+
 export default function App() {
   return (
-    <ThemeProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <MainApp />
-        </ToastProvider>
-      </AuthProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <ErrorBoundary>
+              <MainApp />
+            </ErrorBoundary>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

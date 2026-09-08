@@ -505,6 +505,12 @@ export async function jwtApiAuthGuard(req: AuthenticatedRequest, res: Response, 
     normalizedPath === "/api/auth/reset-password" ||
     normalizedPath === "/api/auth/master-login" ||
     normalizedPath === "/api/auth/master-status" ||
+    normalizedPath === "/api/webhook" ||
+    normalizedPath.startsWith("/api/webhook/") ||
+    normalizedPath === "/api/webhooks" ||
+    normalizedPath.startsWith("/api/webhooks/") ||
+    normalizedPath === "/api/meta/webhook" ||
+    normalizedPath.startsWith("/api/meta/webhook/") ||
     normalizedPath.startsWith("/api/webhooks/meta-receive") ||
     normalizedPath.startsWith("/api/webhooks/facebook") ||
     normalizedPath.startsWith("/api/meta/webhook") ||

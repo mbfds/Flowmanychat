@@ -140,6 +140,84 @@ async function main() {
     return `Status HTTP ${res.status} | Requisição com token JWT aceita e processada com sucesso`;
   });
 
+  // TESTE 6: Webhook Meta Handshake GET /api/webhook
+  await runTest("6. Handshake Meta Webhook (GET /api/webhook)", async () => {
+    const challenge = "challenge_meta_test_9988";
+    const res = await fetch(`${BASE_URL}/api/webhook?hub.mode=subscribe&hub.verify_token=manyflow_verify_token_secure_2026&hub.challenge=${challenge}`);
+    if (res.status !== 200) {
+      throw new Error(`Esperado status 200 no handshake, recebido ${res.status}`);
+    }
+    const body = await res.text();
+    if (body.trim() !== challenge) {
+      throw new Error(`Challenge esperado '${challenge}', recebido '${body}'`);
+    }
+    return `HTTP 200 OK | Handshake validado com sucesso e challenge retornado`;
+  });
+
+  // TESTE 7: Webhook Meta POST /api/webhook com Token Válido
+  await runTest("7. Processamento Inbound Meta Webhook (POST /api/webhook)", async () => {
+    const payload = {
+      object: "instagram",
+      entry: [
+        {
+          id: "page_123",
+          time: Date.now(),
+          messaging: [
+            {
+              sender: { id: "test_user_456" },
+              recipient: { id: "page_123" },
+              message: { text: "Olá ManyFlow!" },
+            },
+          ],
+        },
+      ],
+    };
+
+    const res = await fetch(`${BASE_URL}/api/webhook?hub.verify_token=manyflow_verify_token_secure_2026`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.status !== 200) {
+      const errText = await res.text();
+      throw new Error(`Esperado status 200 no POST /api/webhook, recebido ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    if (data.message !== "EVENT_RECEIVED" || !data.tokenVerified) {
+      throw new Error(`Resposta inesperada: ${JSON.stringify(data)}`);
+    }
+
+    return `HTTP 200 OK | EVENT_RECEIVED confirmado com token validado no .env`;
+  });
+
+  // TESTE 8: Webhook Meta POST /api/webhook com Bloqueio de Token Inválido
+  await runTest("8. Segurança Meta Webhook: Bloqueio de Token Inválido (HTTP 403)", async () => {
+    const payload = { object: "instagram", entry: [] };
+    const res = await fetch(`${BASE_URL}/api/webhook?hub.verify_token=token_falso_hacker_123`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.status !== 403) {
+      throw new Error(`Esperado status 403 para token falso, recebido ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (data.code !== "INVALID_VERIFY_TOKEN") {
+      throw new Error(`Código esperado 'INVALID_VERIFY_TOKEN', recebido '${data.code}'`);
+    }
+
+    return `HTTP 403 Forbidden correto! Token inválido bloqueado com sucesso`;
+  });
+
   // Resumo Final
   console.log("\n--------------------------------------------------------");
   const passedCount = results.filter((r) => r.passed).length;

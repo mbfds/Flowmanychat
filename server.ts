@@ -1628,11 +1628,11 @@ async function routeMetaWebhookEvent(body: any, channelHint?: string, signatureV
   return routedResult;
 }
 
-// 1. GET /api/webhooks/meta-receive & /api/meta/webhook - Meta Webhook Verification (Challenge Handshake)
+// 1. GET /api/webhook, /api/webhooks/meta-receive & /api/meta/webhook - Meta Webhook Verification (Challenge Handshake)
 const handleMetaWebhookVerification = async (req: express.Request, res: express.Response) => {
   const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
+  const token = req.query["hub.verify_token"] || req.query.token || req.query.verify_token;
+  const challenge = req.query["hub.challenge"] || req.query.challenge;
 
   const db = await getDb();
   let validTokens = ["manyflow_verify_token_secure_2026", "manyflow_prod_verify_key_99"];
@@ -1647,42 +1647,136 @@ const handleMetaWebhookVerification = async (req: express.Request, res: express.
     }
   }
 
+  validTokens = Array.from(new Set(validTokens.filter(Boolean).map(t => String(t).trim())));
+
   if (mode === "subscribe" && token && challenge) {
-    const isTokenValid = validTokens.includes(String(token));
+    const isTokenValid = validTokens.includes(String(token).trim());
     if (isTokenValid) {
-      console.log(`[Webhook Meta] Handshake de verificação validado com sucesso! Token: ${token}`);
+      console.log(`[Webhook Meta GET ${req.path}] Handshake de verificação validado com sucesso! Token: ${token}`);
       return res.status(200).send(challenge);
+    } else {
+      console.warn(`[Webhook Meta GET ${req.path}] Token de verificação inválido: ${token}`);
+      return res.status(403).send("Falha na verificação: hub.verify_token inválido conforme configurações de segurança.");
     }
   }
 
-  return res.status(403).send("Falha na verificação: hub.verify_token inválido.");
+  // Allow simple token verification ping if queried directly
+  if (token && validTokens.includes(String(token).trim())) {
+    return res.status(200).json({ 
+      status: "ok", 
+      message: "Token de verificação válido conforme .env",
+      endpoint: req.path,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  return res.status(403).send("Falha na verificação: hub.verify_token ou hub.mode ausente/inválido.");
 };
 
+app.get("/api/webhook", handleMetaWebhookVerification);
+app.get("/api/webhooks", handleMetaWebhookVerification);
 app.get("/api/webhooks/meta-receive", handleMetaWebhookVerification);
 app.get("/api/webhooks/facebook", handleMetaWebhookVerification);
 app.get("/api/meta/webhook", handleMetaWebhookVerification);
 app.get("/api/webhooks/verify", handleMetaWebhookVerification);
 
-// 2. POST /api/webhooks/meta-receive & /api/meta/webhook - Meta Live Inbound Webhook Processor
+// 2. POST /api/webhook, /api/webhooks, /api/webhooks/meta-receive - Meta Live Inbound Webhook Processor with .env Security Validation
 const handleMetaWebhookPost = async (req: express.Request, res: express.Response) => {
   try {
     const body = req.body;
-    const signatureHeader = req.headers["x-hub-signature-256"] as string | undefined;
+    const signatureHeader = (req.headers["x-hub-signature-256"] || req.headers["x-hub-signature"]) as string | undefined;
 
-    // Check App Secret
+    // Check valid verification tokens from .env and MongoDB settings
+    let validTokens = ["manyflow_verify_token_secure_2026", "manyflow_prod_verify_key_99"];
+    if (process.env.META_VERIFY_TOKEN) {
+      validTokens.push(process.env.META_VERIFY_TOKEN);
+    }
+
     let appSecret = process.env.META_APP_SECRET || "mf_sec_89df2a3bc7e1480f90ab12d";
+
     const db = await getDb();
     if (db) {
       const configDoc = await db.collection("settings").findOne({ key: "webhook_settings" });
+      if (configDoc?.value?.globalVerifyToken) {
+        validTokens.push(configDoc.value.globalVerifyToken);
+      }
       if (configDoc?.value?.appSecret) {
         appSecret = configDoc.value.appSecret;
       }
     }
 
-    const { isValid: signatureVerified } = verifyMetaSignature(body, signatureHeader, appSecret);
+    validTokens = Array.from(new Set(validTokens.filter(Boolean).map(t => String(t).trim())));
 
-    // Fast 200 OK acknowledgment to Meta
-    res.status(200).send("EVENT_RECEIVED");
+    // Check token if passed via header, query parameter, or payload body
+    const incomingToken = (
+      req.query["hub.verify_token"] ||
+      req.query.token ||
+      req.query.verify_token ||
+      req.headers["x-hub-verify-token"] ||
+      req.headers["x-verify-token"] ||
+      req.headers["x-meta-token"] ||
+      req.headers["x-webhook-token"] ||
+      (req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.substring(7).trim() : undefined) ||
+      (body && typeof body === "object" ? (body.verify_token || body.token || body["hub.verify_token"]) : undefined)
+    ) as string | undefined;
+
+    let tokenVerified = false;
+    if (incomingToken) {
+      const isTokenValid = validTokens.includes(String(incomingToken).trim());
+      if (!isTokenValid) {
+        console.warn(`[Webhook Meta POST ${req.path}] Token de verificação inválido rejeitado: "${incomingToken}"`);
+        return res.status(403).json({
+          success: false,
+          error: "Falha de autenticação: Token de verificação inválido conforme configurações de segurança do .env.",
+          code: "INVALID_VERIFY_TOKEN",
+        });
+      }
+      tokenVerified = true;
+      console.log(`[Webhook Meta POST ${req.path}] Token validado com sucesso: "${incomingToken}"`);
+    } else if (process.env.META_REQUIRE_TOKEN === "true") {
+      console.warn(`[Webhook Meta POST ${req.path}] Requisição rejeitada: token de verificação obrigatório ausente.`);
+      return res.status(401).json({
+        success: false,
+        error: "Token de verificação obrigatório não fornecido no cabeçalho ou parâmetro de consulta.",
+        code: "VERIFY_TOKEN_REQUIRED",
+      });
+    }
+
+    // Validate body structure
+    if (!body || typeof body !== "object" || Object.keys(body).length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Corpo da requisição (body) vazio ou JSON inválido.",
+      });
+    }
+
+    // Validate HMAC SHA-256 Signature using META_APP_SECRET from .env
+    const { isValid: signatureVerified, calculatedSignature, reason } = verifyMetaSignature(body, signatureHeader, appSecret);
+
+    // If signature enforcement is enabled in .env and verification fails
+    const enforceSignature = process.env.META_ENFORCE_SIGNATURE === "true";
+    if (enforceSignature && !signatureVerified) {
+      console.warn(`[Webhook Meta POST ${req.path}] Assinatura HMAC rejeitada: ${reason}`);
+      return res.status(401).json({
+        success: false,
+        error: `Assinatura de segurança HMAC inválida: ${reason}`,
+        code: "INVALID_SIGNATURE",
+      });
+    }
+
+    // Fast 200 OK acknowledgment to Meta (supports EVENT_RECEIVED standard or JSON if requested)
+    if (req.headers.accept?.includes("application/json") || req.query.format === "json") {
+      res.status(200).json({
+        success: true,
+        message: "EVENT_RECEIVED",
+        tokenVerified,
+        signatureVerified,
+        endpoint: req.path,
+        timestamp: new Date().toISOString(),
+      });
+    } else {
+      res.status(200).send("EVENT_RECEIVED");
+    }
 
     // Execute routing engine asynchronously to not delay Meta HTTP response
     routeMetaWebhookEvent(body, undefined, signatureVerified).catch((err) => {
@@ -1694,6 +1788,8 @@ const handleMetaWebhookPost = async (req: express.Request, res: express.Response
   }
 };
 
+app.post("/api/webhook", handleMetaWebhookPost);
+app.post("/api/webhooks", handleMetaWebhookPost);
 app.post("/api/webhooks/meta-receive", handleMetaWebhookPost);
 app.post("/api/webhooks/facebook", handleMetaWebhookPost);
 app.post("/api/meta/webhook", handleMetaWebhookPost);

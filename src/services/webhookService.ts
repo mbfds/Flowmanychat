@@ -60,10 +60,10 @@ export const webhookService = {
     }
   },
 
-  // 3. Test Meta Verification Handshake (GET /api/webhooks/meta-receive?hub.mode=subscribe&hub.challenge=xyz)
+  // 3. Test Meta Verification Handshake (GET /api/webhook?hub.mode=subscribe&hub.challenge=xyz)
   async testVerificationHandshake(verifyToken: string): Promise<{ success: boolean; challenge?: string; status: number; error?: string }> {
     const testChallenge = `challenge_${Math.random().toString(36).substring(2, 9)}`;
-    const url = `/api/webhooks/meta-receive?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(verifyToken)}&hub.challenge=${encodeURIComponent(testChallenge)}`;
+    const url = `/api/webhook?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(verifyToken)}&hub.challenge=${encodeURIComponent(testChallenge)}`;
 
     try {
       const startTime = performance.now();
@@ -317,7 +317,7 @@ export const webhookService = {
   }> {
     const startTime = performance.now();
     const testChallenge = `challenge_${Math.random().toString(36).substring(2, 9)}`;
-    const handshakeUrl = `/api/webhooks/meta-receive?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(verifyToken)}&hub.challenge=${encodeURIComponent(testChallenge)}`;
+    const handshakeUrl = `/api/webhook?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(verifyToken)}&hub.challenge=${encodeURIComponent(testChallenge)}`;
 
     try {
       const res = await fetch(handshakeUrl);

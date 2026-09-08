@@ -129,7 +129,8 @@ export const MetaWebhookConfigManager: React.FC<MetaWebhookConfigManagerProps> =
 
   // Computed public Callback URLs
   const originUrl = typeof window !== 'undefined' ? window.location.origin : 'https://app.manyflow.io';
-  const callbackUrl = `${originUrl}/api/webhooks/meta-receive`;
+  const callbackUrl = `${originUrl}/api/webhook`;
+  const metaReceiveUrl = `${originUrl}/api/webhooks/meta-receive`;
   const alternativeFacebookUrl = `${originUrl}/api/webhooks/facebook`;
 
   // Sync state if initialSettings changes
@@ -425,9 +426,26 @@ export const MetaWebhookConfigManager: React.FC<MetaWebhookConfigManagerProps> =
                   <span>{copiedKey === 'callback_url' ? 'Copiado!' : 'Copiar URL'}</span>
                 </button>
               </div>
+              <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500">
+                <div className="flex items-center gap-1.5 text-slate-600">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Autenticação segura via token e HMAC SHA-256 (.env).</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">Endpoint legado:</span>
+                  <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-600">/api/webhooks/meta-receive</code>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(metaReceiveUrl, 'meta_receive_url')}
+                    className="text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
+                  >
+                    {copiedKey === 'meta_receive_url' ? 'Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
               <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                <Info className="w-3.5 h-3.5" />
-                Suporta requisições <code className="bg-slate-100 px-1 py-0.2 rounded font-bold text-slate-700">GET</code> para validação de handshake e <code className="bg-slate-100 px-1 py-0.2 rounded font-bold text-slate-700">POST</code> para eventos de chat.
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                Suporta requisições <code className="bg-slate-100 px-1 py-0.2 rounded font-bold text-slate-700">GET</code> para handshake de verificação e <code className="bg-slate-100 px-1 py-0.2 rounded font-bold text-slate-700">POST</code> para eventos e mensagens.
               </p>
             </div>
           </div>

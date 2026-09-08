@@ -232,7 +232,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   };
 
   return (
-    <div id="settings_hub_view" className="flex-1 flex flex-col h-full bg-[#F8F9FB] p-6 lg:p-8 overflow-y-auto space-y-6 select-none">
+    <div id="settings_hub_view" className="settings-hub-container flex-1 flex flex-col h-full bg-[#F8F9FB] p-6 lg:p-8 overflow-y-auto space-y-6 select-none">
       {/* Top Header with Tech Mode Switch */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs">
         <div className="flex items-start gap-3.5">
@@ -1071,6 +1071,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           ) : (
             <WebhooksInOutManager
               settings={webhookSettings || {
+                endpoints: [],
                 globalVerifyToken: 'manyflow_verify_token_secure_2026',
                 appSecret: 'mf_sec_89df2a3bc7e1480f90ab12d',
                 serverBaseUrl: window.location.origin + '/api/webhooks',
