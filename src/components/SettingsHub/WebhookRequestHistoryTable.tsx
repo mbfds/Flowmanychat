@@ -303,7 +303,7 @@ export const WebhookRequestHistoryTable: React.FC<WebhookRequestHistoryTableProp
   };
 
   return (
-    <div id="webhook_request_history_module" className="flex flex-col space-y-6">
+    <div id="webhook_request_history_module" className="webhook-logs-container flex flex-col space-y-6">
       {/* Top Banner / Metrics Overview */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {/* Total Requests */}
@@ -502,6 +502,32 @@ export const WebhookRequestHistoryTable: React.FC<WebhookRequestHistoryTableProp
             }`}
           >
             Todos ({stats.total})
+          </button>
+
+          {/* Sucesso (2xx) */}
+          <button
+            onClick={() => { setStatusGroupFilter('2xx'); setStatusCodeFilter('all'); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+              statusGroupFilter === '2xx' && statusCodeFilter === 'all'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+            }`}
+          >
+            <CheckCircle2 className="w-3 h-3" />
+            Sucesso ({stats.s2xx})
+          </button>
+
+          {/* Erros (4xx/5xx) */}
+          <button
+            onClick={() => { setStatusGroupFilter('4xx'); setStatusCodeFilter('all'); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+              (statusGroupFilter === '4xx' || statusGroupFilter === '5xx') && statusCodeFilter === 'all'
+                ? 'bg-rose-600 text-white'
+                : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+            }`}
+          >
+            <XCircle className="w-3 h-3" />
+            Erros ({stats.s4xx + stats.s5xx})
           </button>
 
           {/* 200 OK */}

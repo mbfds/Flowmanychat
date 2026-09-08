@@ -23,14 +23,19 @@ import { useAuth } from '../../context/AuthContext';
 interface LoginPageProps {
   onSuccess?: () => void;
   onBackToHome?: () => void;
+  onBack?: () => void;
   initialMode?: 'login' | 'register' | 'recovery';
+  targetDestinationName?: string;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ 
   onSuccess,
   onBackToHome,
-  initialMode = 'login'
+  onBack,
+  initialMode = 'login',
+  targetDestinationName
 }) => {
+  const handleBack = onBack || onBackToHome;
   const { login, register, resetPassword, tenant } = useAuth();
   const [mode, setMode] = useState<'login' | 'register' | 'recovery'>(initialMode);
   
@@ -141,9 +146,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
       {/* Domain & Multi-Tenant Host Detection Pill & Back to Home */}
       <div className="mb-4 flex flex-wrap items-center justify-center gap-2.5">
-        {onBackToHome && (
+        {handleBack && (
           <button
-            onClick={onBackToHome}
+            onClick={handleBack}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/90 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-bold transition-colors cursor-pointer shadow-md"
           >
             <span>← Voltar para a Página Inicial</span>
@@ -211,6 +216,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           >
             Recuperar
           </button>
+        </div>
+
+        {/* SECURITY RESTRICTION NOTICE */}
+        <div className="mx-4 mb-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center gap-2 text-amber-800 dark:text-amber-300 text-xs">
+          <Lock className="w-4 h-4 text-amber-600 shrink-0" />
+          <span className="font-medium text-[11px] leading-tight">
+            {targetDestinationName ? (
+              <>
+                <strong>Acesso Restrito:</strong> Faça login ou crie sua conta para acessar direto{' '}
+                <span className="underline font-bold text-amber-900 dark:text-amber-200">{targetDestinationName}</span>.
+              </>
+            ) : (
+              <>
+                <strong>Acesso Restrito:</strong> É obrigatório estar logado para acessar o workspace e os dados do sistema.
+              </>
+            )}
+          </span>
         </div>
 
         {/* Feedback Messages */}
@@ -403,6 +425,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 />
                 <span className="text-xs text-slate-600">Lembrar neste navegador</span>
               </label>
+            </div>
+          )}
+
+          {/* QUICK CREDENTIALS HELPER FOR ADMINISTRATOR */}
+          {mode === 'login' && (
+            <div className="pt-2 border-t border-slate-100 flex flex-col gap-1.5 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('admin@manyflow.io');
+                  setPassword('admin123');
+                }}
+                className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold bg-blue-50/70 hover:bg-blue-100/70 py-1.5 px-2.5 rounded-lg transition-colors cursor-pointer border border-blue-100"
+              >
+                ⚡ Preencher Conta de Administrador (admin@manyflow.io)
+              </button>
             </div>
           )}
 

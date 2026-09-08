@@ -4,7 +4,9 @@ import { Header } from './components/Header';
 import { ComponentLoader } from './components/Common/ComponentLoader';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { ToastProvider, toast } from './context/ToastContext';
 import { dbService } from './services/db';
+import { authService } from './services/authService';
 import { flowLogger } from './utils/flowLogger';
 
 // Lazy-loaded heavy tab modules and modals for optimized bundle splitting & faster initial load
@@ -92,20 +94,121 @@ import {
   INITIAL_WEBHOOK_SETTINGS
 } from './data/initialData';
 import { NavigationTab, Flow, KeywordTrigger, PostCommentGrowthTool, LiveConversation, Contact, BotKnowledgeBase, ChannelType, CustomFieldDefinition, BroadcastCampaign, UtilityMessageTemplate, WebhookSettingsState } from './types';
+import { 
+  parseCurrentRoute, 
+  saveIntendedDestination, 
+  popIntendedDestination, 
+  getLastSavedTab, 
+  syncActiveTab, 
+  setLandingPageView, 
+  wasInWorkspace, 
+  TAB_NAMES, 
+  RouteTarget 
+} from './utils/routeUtils';
 
 function MainApp() {
   const { user, tenant, isAuthenticated } = useAuth();
-  const isDemo = !isAuthenticated || user?.email === 'demo@manyflow.com' || Boolean(user?.isDemo);
+  const isDemo = user?.email === 'demo@manyflow.com' || Boolean(user?.isDemo);
 
-  // Public Landing / Workspace View State (defaults to HomePage so user stays on landing page on load)
-  const [isInWorkspace, setIsInWorkspace] = useState<boolean>(false);
-  const [authMode, setAuthMode] = useState<'home' | 'login' | 'register'>('home');
+  // Initial Route & Redirection Target Detection
+  const [pendingDestination, setPendingDestination] = useState<RouteTarget | null>(() => {
+    const route = parseCurrentRoute();
+    if (route.target) {
+      if (!authService.getLocalUser()) {
+        saveIntendedDestination(route.target);
+        return route.target;
+      }
+    }
+    return popIntendedDestination();
+  });
 
-  // Navigation & View state
-  const [currentTab, setCurrentTab] = useState<NavigationTab>('flows');
+  // Strict Authentication Guard: Only authenticated users can be in the workspace.
+  // If user was previously in workspace and reloads page, stay in workspace!
+  const [isInWorkspace, setIsInWorkspace] = useState<boolean>(() => {
+    const route = parseCurrentRoute();
+    if (route.isExplicitHome) return false;
+    const hasLocalUser = Boolean(authService.getLocalUser());
+    if (!hasLocalUser) return false;
+    // User is logged in: keep them in workspace unless they explicitly chose the landing page
+    return wasInWorkspace();
+  });
+
+  const [authMode, setAuthMode] = useState<'home' | 'login' | 'register'>(() => {
+    const route = parseCurrentRoute();
+    if (route.target && !authService.getLocalUser()) {
+      return 'login';
+    }
+    return 'home';
+  });
+
+  // Enforce session check: if logged out or unauthenticated, expel immediately from workspace
+  useEffect(() => {
+    if (!isAuthenticated || !user) {
+      setIsInWorkspace(false);
+    }
+  }, [isAuthenticated, user]);
+
+  // Navigation & View state - Restore active tab from URL or localStorage
+  const [currentTab, setCurrentTab] = useState<NavigationTab>(() => {
+    const route = parseCurrentRoute();
+    if (route.target?.tab) {
+      return route.target.tab;
+    }
+    return getLastSavedTab();
+  });
+
   const [selectedChannel, setSelectedChannel] = useState<ChannelType>('omnichannel');
   const [flows, setFlows] = useState<Flow[]>(() => isDemo ? DEMO_FLOWS : INITIAL_FLOWS);
-  const [selectedFlowId, setSelectedFlowId] = useState<string>(() => isDemo ? (DEMO_FLOWS[0]?.id || '') : '');
+  const [selectedFlowId, setSelectedFlowId] = useState<string>(() => {
+    const route = parseCurrentRoute();
+    if (route.target?.flowId) {
+      return route.target.flowId;
+    }
+    return isDemo ? (DEMO_FLOWS[0]?.id || '') : '';
+  });
+
+  // Handle Browser Navigation Events (Back/Forward, URL hash modification)
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const route = parseCurrentRoute();
+      if (route.isExplicitHome) {
+        setIsInWorkspace(false);
+        setAuthMode('home');
+        return;
+      }
+
+      if (route.target) {
+        if (isAuthenticated && user) {
+          setIsInWorkspace(true);
+          setCurrentTab(route.target.tab);
+          if (route.target.flowId) {
+            setSelectedFlowId(route.target.flowId);
+          }
+          syncActiveTab(route.target.tab, route.target.flowId);
+        } else {
+          // Unauthenticated user hit a protected URL
+          saveIntendedDestination(route.target);
+          setPendingDestination(route.target);
+          setAuthMode('login');
+          setIsInWorkspace(false);
+        }
+      }
+    };
+
+    window.addEventListener('hashchange', handleLocationChange);
+    window.addEventListener('popstate', handleLocationChange);
+    return () => {
+      window.removeEventListener('hashchange', handleLocationChange);
+      window.removeEventListener('popstate', handleLocationChange);
+    };
+  }, [isAuthenticated, user]);
+
+  // Continuously synchronize active tab with URL hash and localStorage whenever tab or selectedFlow changes in workspace
+  useEffect(() => {
+    if (isAuthenticated && user && isInWorkspace) {
+      syncActiveTab(currentTab, currentTab === 'flows' ? selectedFlowId : undefined);
+    }
+  }, [isAuthenticated, user, isInWorkspace, currentTab, selectedFlowId]);
 
   // Growth Tools, Triggers & Live Data states
   const [triggers, setTriggers] = useState<KeywordTrigger[]>(() => isDemo ? DEMO_TRIGGERS : INITIAL_TRIGGERS);
@@ -178,8 +281,15 @@ function MainApp() {
         } else {
           setContacts([]);
         }
-      } catch (err) {
+
+        toast.success('Sincronização concluída com sucesso!', {
+          description: `${remoteFlows?.length || 0} fluxos e ${remoteContacts?.length || 0} contatos sincronizados com o banco de dados.`
+        });
+      } catch (err: any) {
         console.warn('[App] Erro na sincronização inicial do MongoDB:', err);
+        toast.error('Erro na sincronização', {
+          description: 'Não foi possível sincronizar todos os dados com o banco de dados.'
+        });
       } finally {
         setDbSyncProgress(100);
         setTimeout(() => {
@@ -191,11 +301,39 @@ function MainApp() {
     initDbSync();
   }, [isAuthenticated, user?.email, user?.isDemo]);
 
+  // Handle successful login with smart redirection to intended target or last active tab
+  const handleLoginSuccess = () => {
+    setAuthMode('home');
+    setIsLoginModalOpen(false);
+
+    // Retrieve destination requested prior to login
+    const intended = popIntendedDestination() || pendingDestination;
+    setPendingDestination(null);
+
+    setIsInWorkspace(true);
+
+    if (intended?.tab) {
+      setCurrentTab(intended.tab);
+      if (intended.flowId) {
+        setSelectedFlowId(intended.flowId);
+      }
+      syncActiveTab(intended.tab, intended.flowId);
+    } else {
+      const savedTab = getLastSavedTab();
+      setCurrentTab(savedTab);
+      syncActiveTab(savedTab);
+    }
+  };
+
   // If user explicitly requests full login screen
   if (isLoginModalOpen) {
     return (
       <Suspense fallback={<ComponentLoader label="Carregando portal de acesso..." />}>
-        <LoginPage onSuccess={() => setIsLoginModalOpen(false)} />
+        <LoginPage 
+          onSuccess={handleLoginSuccess} 
+          onBackToHome={() => setIsLoginModalOpen(false)}
+          targetDestinationName={pendingDestination?.tab ? TAB_NAMES[pendingDestination.tab] : undefined}
+        />
       </Suspense>
     );
   }
@@ -413,14 +551,14 @@ function MainApp() {
     }
   };
 
-  // If NOT in workspace view, render public Landing Page (Home) or Login/Register portal
-  if (!isInWorkspace) {
+  // 1. STRICT AUTHENTICATION GUARD: If the user is NOT authenticated, they CANNOT enter the system workspace!
+  if (!isAuthenticated || !user) {
     return (
       <div className="min-h-screen w-screen overflow-x-hidden font-sans">
         <Suspense fallback={<ComponentLoader label="Carregando ManyFlow..." />}>
           {authMode === 'home' ? (
             <HomePage
-              onGoToApp={() => setIsInWorkspace(true)}
+              onGoToApp={() => setAuthMode('login')}
               onOpenLogin={() => setAuthMode('login')}
               onOpenRegister={() => setAuthMode('register')}
               onOpenDemo={() => setIsSimulatorOpen(true)}
@@ -428,11 +566,13 @@ function MainApp() {
           ) : (
             <LoginPage
               initialMode={authMode}
-              onBackToHome={() => setAuthMode('home')}
-              onSuccess={() => {
+              targetDestinationName={pendingDestination?.tab ? TAB_NAMES[pendingDestination.tab] : undefined}
+              onBackToHome={() => {
                 setAuthMode('home');
-                setIsInWorkspace(true);
+                setPendingDestination(null);
+                setLandingPageView();
               }}
+              onSuccess={handleLoginSuccess}
             />
           )}
 
@@ -452,6 +592,27 @@ function MainApp() {
     );
   }
 
+  // 2. AUTHENTICATED USER: If they explicitly navigate to public landing view (e.g. via sidebar button)
+  if (!isInWorkspace) {
+    return (
+      <div className="min-h-screen w-screen overflow-x-hidden font-sans">
+        <Suspense fallback={<ComponentLoader label="Carregando ManyFlow..." />}>
+          <HomePage
+            isAuthenticated={true}
+            user={user}
+            onGoToApp={() => {
+              setIsInWorkspace(true);
+              syncActiveTab(currentTab, selectedFlowId);
+            }}
+            onOpenLogin={() => setAuthMode('login')}
+            onOpenRegister={() => setAuthMode('register')}
+            onOpenDemo={() => setIsSimulatorOpen(true)}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
   const isInZenMode = currentTab === 'flows' && isZenMode;
 
   return (
@@ -460,14 +621,21 @@ function MainApp() {
       {!isInZenMode && (
         <Sidebar
           currentTab={currentTab}
-          onChangeTab={setCurrentTab}
+          onChangeTab={(tab) => {
+            setCurrentTab(tab);
+            syncActiveTab(tab, tab === 'flows' ? selectedFlowId : undefined);
+          }}
           selectedChannel={selectedChannel}
           onSelectChannel={setSelectedChannel}
           unreadConversationsCount={conversations.filter((c) => c.status === 'human_takeover').length}
           onOpenSimulator={() => setIsSimulatorOpen(true)}
           onOpenLoginModal={() => setIsLoginModalOpen(true)}
           onOpenProfileModal={() => setIsProfileModalOpen(true)}
-          onGoToHome={() => setIsInWorkspace(false)}
+          onGoToHome={() => {
+            setIsInWorkspace(false);
+            setLandingPageView();
+            setAuthMode('home');
+          }}
         />
       )}
 
@@ -479,7 +647,12 @@ function MainApp() {
             currentTab={currentTab}
             flows={flows}
             selectedFlowId={selectedFlowId}
-            onSelectFlow={setSelectedFlowId}
+            onSelectFlow={(flowId) => {
+              setSelectedFlowId(flowId);
+              if (currentTab === 'flows') {
+                syncActiveTab('flows', flowId);
+              }
+            }}
             onCreateNewFlow={handleCreateNewFlow}
             onOpenSimulator={() => setIsSimulatorOpen(true)}
             onOpenAIGenerator={() => setIsAIGeneratorOpen(true)}
@@ -747,7 +920,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <MainApp />
+        <ToastProvider>
+          <MainApp />
+        </ToastProvider>
       </AuthProvider>
     </ThemeProvider>
   );

@@ -169,6 +169,12 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
   ]);
   const [targetPlatform, setTargetPlatform] = useState<ConversionWebhookEndpoint['targetPlatform']>('custom_webhook');
   const [secretToken, setSecretToken] = useState('');
+  // Authentication Form state (Bearer Token, API Key, Custom Header)
+  const [authType, setAuthType] = useState<'none' | 'bearer' | 'api_key' | 'custom'>('none');
+  const [bearerToken, setBearerToken] = useState<string>('');
+  const [apiKeyHeaderName, setApiKeyHeaderName] = useState<string>('X-API-Key');
+  const [apiKeyValue, setApiKeyValue] = useState<string>('');
+  const [showAuthToken, setShowAuthToken] = useState<boolean>(false);
   const [includeCustomFields, setIncludeCustomFields] = useState(true);
   const [includeContactData, setIncludeContactData] = useState(true);
   const [description, setDescription] = useState('');
@@ -294,6 +300,11 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
     setTimeoutSeconds(10);
     setRetryableStatusCodes([408, 429, 500, 502, 503, 504]);
     setDescription('');
+    setAuthType('none');
+    setBearerToken('');
+    setApiKeyHeaderName('X-API-Key');
+    setApiKeyValue('');
+    setShowAuthToken(false);
     setHeadersList([{ key: 'X-Origin-App', value: 'ManyFlow-Conversion-Engine' }]);
     setIsModalOpen(true);
   };
@@ -305,6 +316,11 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
     setSelectedEvents(ep.events || ['lead_generated']);
     setTargetPlatform(ep.targetPlatform || 'custom_webhook');
     setSecretToken(ep.secretToken || '');
+    setAuthType(ep.authType || 'none');
+    setBearerToken(ep.bearerToken || '');
+    setApiKeyHeaderName(ep.apiKeyHeaderName || 'X-API-Key');
+    setApiKeyValue(ep.apiKeyValue || '');
+    setShowAuthToken(false);
     setIncludeCustomFields(ep.includeCustomFields ?? true);
     setIncludeContactData(ep.includeContactData ?? true);
     setRetryOnFailure(ep.retryOnFailure ?? true);
@@ -339,6 +355,28 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
 
     let updatedEndpoints: ConversionWebhookEndpoint[];
 
+    // Build headers array merging base headers and explicit auth headers
+    const baseHeaders = headersList.filter((h) => {
+      const k = h.key.trim().toLowerCase();
+      if (authType === 'bearer' && k === 'authorization') return false;
+      if (authType === 'api_key' && k === (apiKeyHeaderName.trim().toLowerCase() || 'x-api-key')) return false;
+      return Boolean(h.key.trim() && h.value.trim());
+    });
+
+    const finalHeaders = [...baseHeaders];
+    if (authType === 'bearer' && bearerToken.trim()) {
+      const cleanToken = bearerToken.trim().replace(/^Bearer\s+/i, '');
+      finalHeaders.push({
+        key: 'Authorization',
+        value: `Bearer ${cleanToken}`
+      });
+    } else if (authType === 'api_key' && apiKeyValue.trim()) {
+      finalHeaders.push({
+        key: apiKeyHeaderName.trim() || 'X-API-Key',
+        value: apiKeyValue.trim()
+      });
+    }
+
     if (editingEndpointId) {
       updatedEndpoints = conversionEndpoints.map((ep) => {
         if (ep.id === editingEndpointId) {
@@ -349,6 +387,10 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
             events: selectedEvents,
             targetPlatform,
             secretToken: secretToken.trim(),
+            authType,
+            bearerToken: bearerToken.trim(),
+            apiKeyHeaderName: apiKeyHeaderName.trim(),
+            apiKeyValue: apiKeyValue.trim(),
             includeCustomFields,
             includeContactData,
             retryOnFailure,
@@ -358,7 +400,7 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
             timeoutSeconds,
             retryableStatusCodes,
             description: description.trim(),
-            headers: headersList.filter((h) => h.key.trim() && h.value.trim()),
+            headers: finalHeaders,
             updatedAt: new Date().toISOString()
           };
         }
@@ -374,6 +416,10 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
         direction: 'outbound',
         targetPlatform,
         secretToken: secretToken.trim(),
+        authType,
+        bearerToken: bearerToken.trim(),
+        apiKeyHeaderName: apiKeyHeaderName.trim(),
+        apiKeyValue: apiKeyValue.trim(),
         includeCustomFields,
         includeContactData,
         retryOnFailure,
@@ -383,7 +429,7 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
         timeoutSeconds,
         retryableStatusCodes,
         description: description.trim(),
-        headers: headersList.filter((h) => h.key.trim() && h.value.trim()),
+        headers: finalHeaders,
         totalDeliveries: 0,
         totalErrors: 0,
         lastDeliveryStatus: 'idle',
@@ -501,7 +547,11 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
         customHeaders: headersMap,
         secretToken: endpoint.secretToken || '',
         endpointName: endpoint.name,
-        timeoutSeconds: endpoint.timeoutSeconds || 10
+        timeoutSeconds: endpoint.timeoutSeconds || 10,
+        authType: endpoint.authType || 'none',
+        bearerToken: endpoint.bearerToken || '',
+        apiKeyHeaderName: endpoint.apiKeyHeaderName || 'X-API-Key',
+        apiKeyValue: endpoint.apiKeyValue || ''
       });
 
       const fullResult = {
@@ -605,7 +655,11 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
         customHeaders,
         secretToken: secretToken.trim(),
         endpointName: name.trim() || 'Teste em Modal',
-        timeoutSeconds: timeoutSeconds || 10
+        timeoutSeconds: timeoutSeconds || 10,
+        authType,
+        bearerToken,
+        apiKeyHeaderName,
+        apiKeyValue
       });
 
       const feedbackData = {
@@ -798,7 +852,7 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
       {/* TAB 1: CONVERSION WEBHOOK ENDPOINTS                       */}
       {/* ========================================================= */}
       {activeSubTab === 'conversions' && (
-        <div className="space-y-4">
+        <div className="settings-webhook-section space-y-4">
           {conversionEndpoints.length === 0 ? (
             <div className="p-8 text-center bg-white rounded-xl border border-gray-200 space-y-3">
               <Webhook className="w-10 h-10 text-gray-400 mx-auto" />
@@ -966,6 +1020,56 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
                               </>
                             )}
                           </div>
+                        </div>
+                      </div>
+
+                      {/* Authentication HTTP Display */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500 font-semibold shrink-0">Autenticação HTTP:</span>
+                        <div className="flex-1 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-200 font-mono text-[11px] text-slate-800 flex items-center justify-between overflow-x-auto">
+                          {ep.authType === 'bearer' && (
+                            <div className="flex items-center gap-2">
+                              <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 text-[10px] font-sans font-bold flex items-center gap-1">
+                                <Key className="w-3 h-3 text-indigo-600" />
+                                Bearer Token
+                              </span>
+                              <span className="text-indigo-700 font-mono text-[10px]">
+                                Authorization: Bearer {ep.bearerToken ? (revealedSecrets[`auth_${ep.id}`] ? ep.bearerToken : `••••••••${ep.bearerToken.slice(-4)}`) : '••••••••'}
+                              </span>
+                            </div>
+                          )}
+                          {ep.authType === 'api_key' && (
+                            <div className="flex items-center gap-2">
+                              <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-sans font-bold flex items-center gap-1">
+                                <Key className="w-3 h-3 text-purple-600" />
+                                API Key
+                              </span>
+                              <span className="text-purple-700 font-mono text-[10px]">
+                                {ep.apiKeyHeaderName || 'X-API-Key'}: {ep.apiKeyValue ? (revealedSecrets[`auth_${ep.id}`] ? ep.apiKeyValue : `••••••••${ep.apiKeyValue.slice(-4)}`) : '••••••••'}
+                              </span>
+                            </div>
+                          )}
+                          {ep.authType === 'custom' && (
+                            <span className="text-blue-700 text-[10px] font-bold">
+                              {ep.headers?.length || 0} Cabeçalho(s) Personalizado(s)
+                            </span>
+                          )}
+                          {(!ep.authType || ep.authType === 'none') && (
+                            <span className="text-gray-400 italic">Nenhuma autorização configurada</span>
+                          )}
+
+                          {(ep.bearerToken || ep.apiKeyValue) && (
+                            <div className="flex items-center gap-1 shrink-0 ml-2">
+                              <button
+                                type="button"
+                                onClick={() => setRevealedSecrets((prev) => ({ ...prev, [`auth_${ep.id}`]: !prev[`auth_${ep.id}`] }))}
+                                className="text-gray-400 hover:text-gray-700 p-1 cursor-pointer"
+                                title={revealedSecrets[`auth_${ep.id}`] ? 'Ocultar Auth' : 'Revelar Auth'}
+                              >
+                                {revealedSecrets[`auth_${ep.id}`] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1647,17 +1751,54 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
 
               {/* Destination URL */}
               <div>
-                <label className="block text-xs font-bold text-[#1A1D21] mb-1">
-                  URL de Destino (Endpoint HTTPS) <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://seu-crm.com/api/webhooks ou https://n8n.suaempresa.com/webhook/..."
-                  className="w-full px-3 py-2 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] font-mono text-xs text-[#1A1D21] focus:outline-none focus:ring-1 focus:ring-[#0084FF]"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-[#1A1D21]">
+                    URL de Destino (Endpoint HTTPS) <span className="text-rose-500">*</span>
+                  </label>
+                  {modalTestFeedback && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                      modalTestFeedback.success ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                    }`}>
+                      {modalTestFeedback.success ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                      {modalTestFeedback.statusCode === 200 ? '200 OK' : `${modalTestFeedback.statusCode} ${modalTestFeedback.success ? 'OK' : 'Falha'}`}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    required
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    placeholder="https://seu-crm.com/api/webhooks ou https://n8n.suaempresa.com/webhook/..."
+                    className="flex-1 px-3 py-2 rounded-lg bg-[#F8F9FB] border border-[#E2E8F0] font-mono text-xs text-[#1A1D21] focus:outline-none focus:ring-1 focus:ring-[#0084FF]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleModalTestDispatch}
+                    disabled={modalTesting || !url.trim()}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0"
+                    title="Enviar ping de teste para o webhook configurado e visualizar retorno"
+                  >
+                    <Play className={`w-3.5 h-3.5 ${modalTesting ? 'animate-spin' : ''}`} />
+                    <span>{modalTesting ? 'Testando...' : 'Testar Endpoint'}</span>
+                  </button>
+                </div>
+                {modalTestFeedback && (
+                  <div className={`mt-2 p-2.5 rounded-lg border text-xs flex items-center justify-between ${
+                    modalTestFeedback.success
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-rose-50 border-rose-200 text-rose-900'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">Retorno do status:</span>
+                      <span className="font-mono font-black px-1.5 py-0.5 rounded bg-white border border-current">
+                        {modalTestFeedback.statusCode === 200 ? '200 OK' : `${modalTestFeedback.statusCode} ${modalTestFeedback.success ? 'OK' : 'Erro'}`}
+                      </span>
+                      <span className="text-[11px] text-gray-500">({modalTestFeedback.durationMs}ms)</span>
+                    </div>
+                  </div>
+                )}
                 <p className="text-[11px] text-gray-500 mt-1">
                   O ManyFlow enviará requisições HTTP POST com payload JSON neste endereço.
                 </p>
@@ -1714,6 +1855,189 @@ export const WebhookConfigManager: React.FC<WebhookConfigManagerProps> = ({
                     );
                   })}
                 </div>
+              </div>
+
+              {/* Autenticação HTTP (Bearer Token / API Key / Custom) */}
+              <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-indigo-600" />
+                    <div>
+                      <label className="block text-xs font-bold text-gray-900">
+                        Autenticação do Endpoint (Bearer Token / API Key)
+                      </label>
+                      <span className="text-[10px] text-gray-500">
+                        Injeta cabeçalho de autorização HTTP de segurança para APIs externas protegidas
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    authType === 'bearer'
+                      ? 'bg-indigo-100 text-indigo-800'
+                      : authType === 'api_key'
+                      ? 'bg-purple-100 text-purple-800'
+                      : authType === 'custom'
+                      ? 'bg-blue-100 text-blue-800'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {authType === 'bearer' && 'Bearer Ativo'}
+                    {authType === 'api_key' && 'API Key Ativa'}
+                    {authType === 'custom' && 'Headers Personalizados'}
+                    {authType === 'none' && 'Sem Autenticação'}
+                  </span>
+                </div>
+
+                {/* Method selector */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAuthType('none')}
+                    className={`p-2 rounded-lg border text-xs font-bold transition-all text-center cursor-pointer ${
+                      authType === 'none'
+                        ? 'bg-white border-indigo-600 text-indigo-900 shadow-2xs'
+                        : 'bg-white/60 border-gray-200 text-gray-600 hover:bg-white'
+                    }`}
+                  >
+                    Nenhum
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAuthType('bearer')}
+                    className={`p-2 rounded-lg border text-xs font-bold transition-all text-center cursor-pointer ${
+                      authType === 'bearer'
+                        ? 'bg-white border-indigo-600 text-indigo-900 shadow-2xs'
+                        : 'bg-white/60 border-gray-200 text-gray-600 hover:bg-white'
+                    }`}
+                  >
+                    Bearer Token
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAuthType('api_key')}
+                    className={`p-2 rounded-lg border text-xs font-bold transition-all text-center cursor-pointer ${
+                      authType === 'api_key'
+                        ? 'bg-white border-indigo-600 text-indigo-900 shadow-2xs'
+                        : 'bg-white/60 border-gray-200 text-gray-600 hover:bg-white'
+                    }`}
+                  >
+                    API Key
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setAuthType('custom')}
+                    className={`p-2 rounded-lg border text-xs font-bold transition-all text-center cursor-pointer ${
+                      authType === 'custom'
+                        ? 'bg-white border-indigo-600 text-indigo-900 shadow-2xs'
+                        : 'bg-white/60 border-gray-200 text-gray-600 hover:bg-white'
+                    }`}
+                  >
+                    Personalizado
+                  </button>
+                </div>
+
+                {/* Bearer Token Input */}
+                {authType === 'bearer' && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-[11px] font-bold text-indigo-950">
+                        Token de Autorização (Bearer Token) *
+                      </label>
+                      <span className="text-[10px] text-gray-400">Enviado como 'Authorization: Bearer &lt;token&gt;'</span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showAuthToken ? 'text' : 'password'}
+                        value={bearerToken}
+                        onChange={(e) => setBearerToken(e.target.value)}
+                        placeholder="sk_live_... ou eyJhbGciOi..."
+                        className="w-full pl-3 pr-20 py-2 rounded-lg bg-white border border-indigo-300 font-mono text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowAuthToken(!showAuthToken)}
+                          className="p-1 text-gray-400 hover:text-gray-700 cursor-pointer"
+                        >
+                          {showAuthToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                        {bearerToken && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(bearerToken, 'modal_bearer')}
+                            className="p-1 text-gray-400 hover:text-indigo-600 cursor-pointer"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* API Key Inputs */}
+                {authType === 'api_key' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 pt-1">
+                    <div className="sm:col-span-5 space-y-1">
+                      <label className="block text-[11px] font-bold text-indigo-950">
+                        Nome do Header *
+                      </label>
+                      <input
+                        type="text"
+                        value={apiKeyHeaderName}
+                        onChange={(e) => setApiKeyHeaderName(e.target.value)}
+                        placeholder="X-API-Key"
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-indigo-300 font-mono text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                      <div className="flex items-center gap-1">
+                        {['X-API-Key', 'api-key', 'X-Auth-Token'].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setApiKeyHeaderName(preset)}
+                            className="text-[9px] px-1.5 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 cursor-pointer"
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="sm:col-span-7 space-y-1">
+                      <label className="block text-[11px] font-bold text-indigo-950">
+                        Chave de API (Secret Key) *
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showAuthToken ? 'text' : 'password'}
+                          value={apiKeyValue}
+                          onChange={(e) => setApiKeyValue(e.target.value)}
+                          placeholder="ak_live_7623a89bc45d01e..."
+                          className="w-full pl-3 pr-16 py-2 rounded-lg bg-white border border-indigo-300 font-mono text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowAuthToken(!showAuthToken)}
+                            className="p-1 text-gray-400 hover:text-gray-700 cursor-pointer"
+                          >
+                            {showAuthToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                          {apiKeyValue && (
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(apiKeyValue, 'modal_api_key')}
+                              className="p-1 text-gray-400 hover:text-indigo-600 cursor-pointer"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Secret Key / HMAC Configuration */}

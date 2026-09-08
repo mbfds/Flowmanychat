@@ -58,6 +58,7 @@ import {
 import { EngagementDonutChart } from './EngagementDonutChart';
 import { LeadScoreBreakdownModal } from './LeadScoreBreakdownModal';
 import { LeadScoringRulesModal } from './LeadScoringRulesModal';
+import { useToast } from '../../context/ToastContext';
 import { BulkActionsToolbar } from './BulkActionsToolbar';
 import { BulkActionsSidebar } from './BulkActionsSidebar';
 import { BulkAssignFlowModal } from './BulkAssignFlowModal';
@@ -90,6 +91,7 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
   const [sortBy, setSortBy] = useState<'score_desc' | 'score_asc' | 'recent' | 'interactions' | 'name'>('score_desc');
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [drawerInitialTab, setDrawerInitialTab] = useState<'scoring' | 'activity' | 'notes' | 'details' | 'custom_fields'>('scoring');
+  const toast = useToast();
   const [scoringRules, setScoringRules] = useState<ScoringRuleConfig>(() => {
     try {
       const saved = localStorage.getItem('manyflow_scoring_rules');
@@ -724,6 +726,9 @@ export const ContactsCRM: React.FC<ContactsCRMProps> = ({
     if (contactForScoreBreakdown?.id === updatedContact.id) {
       setContactForScoreBreakdown(updatedContact);
     }
+    toast.success('Contato atualizado com sucesso!', {
+      description: `Os dados de "${updatedContact.name}" foram salvos.`
+    });
   };
 
   const openDrawerWithTab = (contact: Contact, tab: 'scoring' | 'activity' | 'notes' | 'details' | 'custom_fields') => {

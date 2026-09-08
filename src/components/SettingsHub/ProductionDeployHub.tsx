@@ -19,16 +19,20 @@ import {
   Globe, 
   HelpCircle,
   Zap,
-  Activity
+  Activity,
+  Clock
 } from 'lucide-react';
 import { ProductionAuditReport } from '../../types';
 import { tenantService } from '../../services/tenantService';
+import { CronJobsManager } from './CronJobsManager';
+import { VercelDeployGuide } from './VercelDeployGuide';
+import { HealthStatusMonitor } from './HealthStatusMonitor';
 
 export const ProductionDeployHub: React.FC = () => {
   const [report, setReport] = useState<ProductionAuditReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'audit' | 'nginx' | 'pm2' | 'aapanel_guide'>('audit');
+  const [activeTab, setActiveTab] = useState<'audit' | 'health' | 'cron' | 'vercel' | 'aapanel_guide' | 'nginx' | 'pm2'>('audit');
 
   const fetchAudit = async () => {
     setIsLoading(true);
@@ -175,6 +179,44 @@ module.exports = {
         </button>
 
         <button
+          onClick={() => setActiveTab('health')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+            activeTab === 'health'
+              ? 'border-emerald-600 text-emerald-600'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-emerald-600" />
+          <span>Status & Health Check (/api/health)</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cron')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+            activeTab === 'cron'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Clock className="w-4 h-4 text-indigo-600" />
+          <span>Cron Jobs & Workers</span>
+          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+        </button>
+
+        <button
+          onClick={() => setActiveTab('vercel')}
+          className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+            activeTab === 'vercel'
+              ? 'border-slate-900 text-slate-900'
+              : 'border-transparent text-slate-500 hover:text-slate-900'
+          }`}
+        >
+          <Globe className="w-4 h-4 text-slate-900" />
+          <span>Vercel & Variáveis de Ambiente</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('aapanel_guide')}
           className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
             activeTab === 'aapanel_guide'
@@ -293,6 +335,21 @@ module.exports = {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Tab: Health Status & Availability Monitor */}
+      {activeTab === 'health' && (
+        <HealthStatusMonitor />
+      )}
+
+      {/* Tab: Background Cron Jobs & Workers */}
+      {activeTab === 'cron' && (
+        <CronJobsManager />
+      )}
+
+      {/* Tab: Vercel & Environment Variables */}
+      {activeTab === 'vercel' && (
+        <VercelDeployGuide />
       )}
 
       {/* Tab 2: aaPanel Step-by-Step Guide */}

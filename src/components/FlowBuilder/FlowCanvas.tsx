@@ -56,6 +56,7 @@ import { FlowImportModal } from './FlowImportModal';
 import { FlowVersionHistoryModal } from './FlowVersionHistoryModal';
 import { parseAndValidateFlowJson, downloadFlowAsJson, FlowValidationResult } from '../../services/flowTemplateService';
 import { saveFlowSnapshot } from '../../services/flowVersionService';
+import { useToast } from '../../context/ToastContext';
 
 interface FlowCanvasProps {
   flow: Flow;
@@ -131,6 +132,7 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
 
   // Export Feedback Toast
   const [exportFeedbackToast, setExportFeedbackToast] = useState<string | null>(null);
+  const toast = useToast();
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -805,13 +807,23 @@ export const FlowCanvas: React.FC<FlowCanvasProps> = ({
         connections: flow.connections,
         isAutoSave: true
       });
-    } catch {}
+      toast.success('Fluxo salvo com sucesso!', {
+        description: `O fluxo "${flow.title}" foi publicado e salvo no banco de dados.`
+      });
+    } catch (err: any) {
+      toast.error('Erro ao salvar fluxo', {
+        description: err.message || 'Não foi possível salvar a versão do fluxo.'
+      });
+    }
     setTimeout(() => setIsSaved(false), 2000);
   };
 
   const handleRestoreFlowVersion = (restoredFlow: Flow) => {
     onUpdateFlow(restoredFlow);
     setSelectedNode(null);
+    toast.success('Versão restaurada com sucesso!', {
+      description: `O fluxo "${restoredFlow.title}" foi restaurado.`
+    });
     setExportFeedbackToast(`Fluxo "${restoredFlow.title}" restaurado com sucesso!`);
     setTimeout(() => setExportFeedbackToast(null), 4000);
   };

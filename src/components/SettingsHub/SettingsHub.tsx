@@ -86,6 +86,8 @@ import { AffiliateResellerHub } from './AffiliateResellerHub';
 import { McpServerHub } from './McpServerHub';
 import { WebhookStatusManager } from './WebhookStatusManager';
 import { WebhookConfigManager } from './WebhookConfigManager';
+import { WebhooksInOutManager } from './WebhooksInOutManager';
+import { MetaWebhookConfigManager } from './MetaWebhookConfigManager';
 import { SystemVariablesManager } from './SystemVariablesManager';
 import { InactiveContactsMonitoringManager } from './InactiveContactsMonitoringManager';
 import { AutoTaggingManager } from './AutoTaggingManager';
@@ -173,6 +175,7 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
   // Secondary sub-tab states
   const [facebookSubTab, setFacebookSubTab] = useState<'token_validator' | 'wizard' | 'apps' | 'graph_api'>('token_validator');
   const [webhooksSubTab, setWebhooksSubTab] = useState<'meta_validator' | 'config' | 'logs' | 'signature' | 'subscriptions' | 'retries' | 'external'>('meta_validator');
+  const [webhookConfigTab, setWebhookConfigTab] = useState<'meta_config' | 'outbound'>('meta_config');
   const [systemSubTab, setSystemSubTab] = useState<'database' | 'deploy' | 'rate_limits' | 'audit'>('database');
   const [channelsSubView, setChannelsSubView] = useState<'overview' | 'token_validator'>('overview');
 
@@ -404,9 +407,10 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
           }`}
         >
           <Webhook className="w-4 h-4 text-blue-600" />
-          <span>Configuração de Webhooks</span>
-          <span className="px-1.5 py-0.2 rounded text-[10px] font-black bg-blue-100 text-blue-800">
-            {webhookSettings?.conversionEndpoints?.length || 0} URLs
+          <span>Configuração do Webhook Meta</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 flex items-center gap-1 border border-blue-200">
+            <Key className="w-2.5 h-2.5" />
+            Verify Token & Secret
           </span>
         </button>
 
@@ -1018,29 +1022,73 @@ export const SettingsHub: React.FC<SettingsHubProps> = ({
       )}
 
       {/* ========================================================= */}
-      {/* ESSENTIAL TAB: CONFIGURAÇÃO DE WEBHOOKS (CONVERSÕES)     */}
+      {/* ESSENTIAL TAB: CONFIGURAÇÃO DE WEBHOOKS (ENTRADA & SAÍDA) */}
       {/* ========================================================= */}
       {activeTab === 'webhook_config' && (
         <div className="space-y-4">
-          <WebhookConfigManager
-            settings={webhookSettings || {
-              globalVerifyToken: 'manyflow_verify_token_secure_2026',
-              appSecret: 'mf_sec_89df2a3bc7e1480f90ab12d',
-              serverBaseUrl: window.location.origin + '/api/webhooks',
-              enableLogging: true,
-              verificationStatus: 'verified',
-              autoRetryFailed: true,
-              maxRetryAttempts: 3,
-              activeFields: ['messages', 'messaging_postbacks'],
-              conversionEndpoints: []
-            }}
-            onUpdateSettings={(updated) => {
-              if (onUpdateWebhookSettings) {
-                onUpdateWebhookSettings(updated);
-              }
-            }}
-            onOpenLogs={() => setActiveTab('webhook_logs')}
-          />
+          {/* Sub-tab Navigation */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80 max-w-2xl">
+            <button
+              type="button"
+              id="btn_subtab_meta_webhook_config"
+              onClick={() => setWebhookConfigTab('meta_config')}
+              className={`flex-1 py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                webhookConfigTab === 'meta_config'
+                  ? 'bg-white text-blue-900 shadow-xs border border-slate-200/80 font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+              }`}
+            >
+              <Key className="w-3.5 h-3.5 text-blue-600" />
+              <span>Configurações Meta (Verify Token & App Secret)</span>
+            </button>
+
+            <button
+              type="button"
+              id="btn_subtab_outbound_webhooks"
+              onClick={() => setWebhookConfigTab('outbound')}
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                webhookConfigTab === 'outbound'
+                  ? 'bg-white text-blue-900 shadow-xs border border-slate-200/80 font-black'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-blue-600" />
+              <span>Endpoints de Saída ({webhookSettings?.conversionEndpoints?.length || 0})</span>
+            </button>
+          </div>
+
+          {webhookConfigTab === 'meta_config' ? (
+            <MetaWebhookConfigManager
+              settings={webhookSettings}
+              onUpdateSettings={(updated) => {
+                if (onUpdateWebhookSettings) {
+                  onUpdateWebhookSettings(updated);
+                }
+              }}
+              onOpenLogs={() => setActiveTab('webhook_logs')}
+              onOpenLiveChat={onOpenLiveChat}
+            />
+          ) : (
+            <WebhooksInOutManager
+              settings={webhookSettings || {
+                globalVerifyToken: 'manyflow_verify_token_secure_2026',
+                appSecret: 'mf_sec_89df2a3bc7e1480f90ab12d',
+                serverBaseUrl: window.location.origin + '/api/webhooks',
+                enableLogging: true,
+                verificationStatus: 'verified',
+                autoRetryFailed: true,
+                maxRetryAttempts: 3,
+                activeFields: ['messages', 'messaging_postbacks'],
+                conversionEndpoints: []
+              }}
+              onUpdateSettings={(updated) => {
+                if (onUpdateWebhookSettings) {
+                  onUpdateWebhookSettings(updated);
+                }
+              }}
+              onOpenLiveChat={onOpenLiveChat}
+            />
+          )}
         </div>
       )}
 

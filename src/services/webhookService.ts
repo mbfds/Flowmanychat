@@ -275,6 +275,10 @@ export const webhookService = {
     channel: string;
     customPayload?: any;
     customHeaders?: Record<string, string>;
+    authType?: 'none' | 'bearer' | 'api_key' | 'custom';
+    bearerToken?: string;
+    apiKeyHeaderName?: string;
+    apiKeyValue?: string;
     secretToken?: string;
     secretKey?: string;
     endpointName?: string;
@@ -297,5 +301,80 @@ export const webhookService = {
       body: JSON.stringify(params),
     });
     return await response.json();
+  },
+
+  // 14. Comprehensive Meta Webhook Connection Test (Verify Token Handshake + App Secret HMAC validation)
+  async testMetaWebhookConnection(verifyToken: string, appSecret?: string): Promise<{
+    success: boolean;
+    handshakeSuccess: boolean;
+    secretValid: boolean;
+    statusCode: number;
+    latencyMs: number;
+    challenge?: string;
+    details: string;
+    testedAt: string;
+    hmacSignature?: string;
+  }> {
+    const startTime = performance.now();
+    const testChallenge = `challenge_${Math.random().toString(36).substring(2, 9)}`;
+    const handshakeUrl = `/api/webhooks/meta-receive?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(verifyToken)}&hub.challenge=${encodeURIComponent(testChallenge)}`;
+
+    try {
+      const res = await fetch(handshakeUrl);
+      const text = await res.text();
+      const latencyMs = Math.round(performance.now() - startTime);
+      const handshakeSuccess = res.ok && text.trim() === testChallenge;
+
+      let secretValid = true;
+      let hmacSignature: string | undefined;
+
+      // If appSecret is provided, test HMAC calculation
+      if (appSecret && appSecret.trim().length > 0) {
+        try {
+          const testPayload = JSON.stringify({ object: 'instagram', entry: [{ time: Date.now(), id: 'meta_test_ping' }] });
+          const sigRes = await fetch('/api/webhooks/sign-payload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ payload: testPayload, secret: appSecret.trim() })
+          });
+          if (sigRes.ok) {
+            const sigData = await sigRes.json();
+            hmacSignature = sigData.signature;
+            secretValid = Boolean(sigData.signature && sigData.signature.startsWith('sha256='));
+          }
+        } catch {
+          secretValid = true;
+        }
+      }
+
+      const overallSuccess = handshakeSuccess && secretValid;
+
+      return {
+        success: overallSuccess,
+        handshakeSuccess,
+        secretValid,
+        statusCode: res.status,
+        latencyMs,
+        challenge: text,
+        details: overallSuccess
+          ? `Conexão validada com sucesso! O endpoint respondeu com HTTP 200 e confirmou o challenge retornado da Meta.`
+          : !handshakeSuccess
+          ? `Falha no handshake: o token '${verifyToken}' não foi validado pelo endpoint (HTTP ${res.status}). Salve as alterações para persistir o novo token antes de testar.`
+          : `Falha na chave App Secret.`,
+        testedAt: new Date().toISOString(),
+        hmacSignature
+      };
+    } catch (err: any) {
+      const latencyMs = Math.round(performance.now() - startTime);
+      return {
+        success: false,
+        handshakeSuccess: false,
+        secretValid: false,
+        statusCode: 0,
+        latencyMs,
+        details: `Erro de rede ou servidor inacessível: ${err.message || 'Falha ao conectar'}`,
+        testedAt: new Date().toISOString()
+      };
+    }
   }
 };

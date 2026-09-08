@@ -45,12 +45,26 @@ export const authService = {
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     localStorage.setItem(TENANT_KEY, JSON.stringify(tenant));
+    try {
+      if (typeof document !== 'undefined') {
+        document.cookie = `manyflow_token=${encodeURIComponent(token)}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
+      }
+    } catch {
+      // Ignored in non-browser environments
+    }
   },
 
   clearSession() {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(TENANT_KEY);
+    try {
+      if (typeof document !== 'undefined') {
+        document.cookie = 'manyflow_token=; path=/; max-age=0; SameSite=Lax';
+      }
+    } catch {
+      // Ignored
+    }
   },
 
   getLocalUser(): User | null {
@@ -280,3 +294,16 @@ export const authService = {
     }
   }
 };
+
+// Automatic cookie synchronization for browser sessions
+if (typeof document !== 'undefined') {
+  try {
+    const existingToken = localStorage.getItem(TOKEN_KEY);
+    if (existingToken && !document.cookie.includes('manyflow_token=')) {
+      document.cookie = `manyflow_token=${encodeURIComponent(existingToken)}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
+    }
+  } catch {
+    // Ignore
+  }
+}
+

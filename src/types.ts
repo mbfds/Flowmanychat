@@ -746,13 +746,18 @@ export interface WebhookDeliveryLog {
 
 export type ConversionEventType =
   | 'lead_generated'
+  | 'new_message'
+  | 'new_contact'
+  | 'contact_updated'
+  | 'human_takeover_requested'
   | 'sale_completed'
   | 'appointment_booked'
   | 'tag_added'
   | 'flow_completed'
   | 'cart_abandoned'
   | 'pix_paid'
-  | 'contact_qualified';
+  | 'contact_qualified'
+  | 'lead_qualified';
 
 export interface ConversionWebhookEndpoint {
   id: string;
@@ -763,6 +768,10 @@ export interface ConversionWebhookEndpoint {
   direction?: 'outbound' | 'inbound';
   targetPlatform?: 'custom_webhook' | 'rd_station' | 'hubspot' | 'active_campaign' | 'zapier' | 'n8n' | 'make' | 'hotmart' | 'kiwify';
   secretToken?: string;
+  authType?: 'none' | 'bearer' | 'api_key' | 'custom';
+  bearerToken?: string;
+  apiKeyHeaderName?: string;
+  apiKeyValue?: string;
   headers?: { key: string; value: string }[];
   includeCustomFields?: boolean;
   includeContactData?: boolean;

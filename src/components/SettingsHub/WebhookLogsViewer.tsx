@@ -249,7 +249,7 @@ export const WebhookLogsViewer: React.FC<WebhookLogsViewerProps> = ({
   };
 
   return (
-    <div id="webhook_logs_viewer_component" className="space-y-6 select-none">
+    <div id="webhook_logs_viewer_component" className="webhook-logs-container space-y-6 select-none">
       {/* 1. Header & Live Real-Time Control Center */}
       <div className="p-5 rounded-2xl bg-white border border-[#E2E8F0] shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">

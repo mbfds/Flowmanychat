@@ -235,36 +235,39 @@ export const HomePage: React.FC<HomePageProps> = ({
                 Transforme comentários em vendas no Direct, gerencie e monetize grupos VIP no WhatsApp, e qualifique leads 24/7 em uma infraestrutura multi-tenant com <strong>Isolamento Total</strong> e <strong>Segurança com Senha Master</strong>.
               </p>
 
-              {/* CTAs */}
+              {/* CTAs - Only authenticated users can enter the workspace */}
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 pt-2">
-                <button
-                  id="btn_hero_start_free"
-                  onClick={onOpenRegister}
-                  className="w-full sm:w-auto py-3 px-6 rounded-xl bg-[#0084FF] hover:bg-[#0073E6] text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Zap className="w-4 h-4 fill-current" />
-                  <span>Criar Conta e Testar Agora</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-
-                <button
-                  id="btn_hero_open_login"
-                  onClick={onOpenLogin}
-                  className="w-full sm:w-auto py-3 px-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-400 text-[#1A1D21] dark:text-white font-bold text-sm shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <Lock className="w-4 h-4 text-blue-600" />
-                  <span>Já tenho conta (Fazer Login)</span>
-                </button>
-
-                {onGoToApp && (
+                {isAuthenticated && user ? (
                   <button
                     id="btn_hero_open_app_direct"
                     onClick={onGoToApp}
-                    className="w-full sm:w-auto py-3 px-5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    className="w-full sm:w-auto py-3 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <Layers className="w-4 h-4 text-indigo-500" />
-                    <span>Acessar Painel</span>
+                    <Layers className="w-4 h-4" />
+                    <span>Entrar no Sistema ({user.name.split(' ')[0]})</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
+                ) : (
+                  <>
+                    <button
+                      id="btn_hero_start_free"
+                      onClick={onOpenRegister}
+                      className="w-full sm:w-auto py-3 px-6 rounded-xl bg-[#0084FF] hover:bg-[#0073E6] text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Zap className="w-4 h-4 fill-current" />
+                      <span>Criar Conta e Entrar</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      id="btn_hero_open_login"
+                      onClick={onOpenLogin}
+                      className="w-full sm:w-auto py-3 px-6 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-blue-400 text-[#1A1D21] dark:text-white font-bold text-sm shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Lock className="w-4 h-4 text-blue-600" />
+                      <span>Fazer Login para Acessar</span>
+                    </button>
+                  </>
                 )}
               </div>
 

@@ -108,6 +108,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authService.clearSession();
     setUser(null);
     setToken(null);
+    try {
+      localStorage.removeItem('manyflow_in_workspace');
+      localStorage.removeItem('manyflow_active_tab');
+      sessionStorage.removeItem('manyflow_intended_redirect');
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch {
+      // Ignored
+    }
   };
 
   const switchTenant = async (tenantId: string) => {

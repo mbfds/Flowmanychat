@@ -6,6 +6,20 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { getDb, checkMongoStatus } from "./server/mongodb";
 import { createMcpRouter } from "./server/mcpServer";
+import { cronManager } from "./server/cronManager";
+import { cronService } from "./src/services/cronService";
+import { 
+  createSession, 
+  validateSessionToken, 
+  requireAuth, 
+  optionalAuth, 
+  revokeSession, 
+  revokeAllUserSessions, 
+  listUserSessions, 
+  getJwtExpiresIn,
+  AuthenticatedRequest,
+  jwtApiAuthGuard
+} from "./server/authSession";
 
 interface MetaBatchResponseItem {
   code: number;
@@ -34,6 +48,9 @@ const PORT = 3000;
 
 app.use(express.json({ limit: "10mb" }));
 
+// Global JWT Authentication Guard: Protects all /api/* routes against direct unauthenticated access to MongoDB
+app.use("/api", jwtApiAuthGuard);
+
 // Initialize Google GenAI client (lazy / safe initialization)
 function getGeminiClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -51,9 +68,85 @@ function getGeminiClient() {
   });
 }
 
-// Health check
-app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+// ============================================================================
+// --- PRODUCTION HEALTH & MONITORING ENDPOINT (/api/health) ---
+// ============================================================================
+app.get("/api/health", async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const mongoStatus = await checkMongoStatus();
+    const cronStatus = cronManager.getStatus();
+    const cronServiceStatus = cronService.getStatus();
+    const durationMs = Date.now() - startTime;
+    const isDbConnected = Boolean(mongoStatus.connected);
+
+    // Support strict probe for container orchestrators (e.g. Kubernetes readiness probes: /api/health?strict=true)
+    const isStrict = req.query.strict === "true" || req.query.probe === "readiness";
+    const statusCode = isStrict && !isDbConnected ? 503 : 200;
+
+    res.status(statusCode).json({
+      status: isDbConnected ? "ok" : "degraded",
+      statusCode: 200,
+      healthy: true,
+      timestamp: new Date().toISOString(),
+      responseTime: `${durationMs}ms`,
+      responseTimeMs: durationMs,
+      service: "ManyFlow Multi-Tenant Platform",
+      version: "2.5.0",
+      environment: process.env.NODE_ENV || "development",
+      uptimeSeconds: Math.floor(process.uptime()),
+      database: {
+        provider: "MongoDB",
+        connected: isDbConnected,
+        active: isDbConnected,
+        status: isDbConnected ? "active" : (mongoStatus.uriConfigured ? "connecting" : "unconfigured"),
+        uriConfigured: mongoStatus.uriConfigured,
+        dbName: mongoStatus.dbName,
+        collectionsCount: mongoStatus.collections?.length || 0,
+        pingLatencyMs: mongoStatus.poolStats?.pingLatencyMs ?? durationMs,
+        serverVersion: mongoStatus.poolStats?.serverVersion,
+        error: mongoStatus.error || null,
+      },
+      auth: {
+        sessionPersistence: "JWT + MongoDB Active Session Store",
+        jwtExpiration: getJwtExpiresIn(),
+        status: "active",
+      },
+      cron: {
+        engine: "node-cron",
+        status: cronStatus.status,
+        activeWorkers: cronStatus.summary.activeWorkers,
+        totalWorkers: cronStatus.summary.totalWorkers,
+        successRate: cronStatus.summary.successRate,
+        scheduledTasks: cronServiceStatus.tasks.map((t) => ({
+          id: t.id,
+          name: t.name,
+          expression: t.expression,
+          isRunning: t.isRunning,
+          lastRunAt: t.lastRunAt,
+        })),
+      },
+      system: {
+        memory: {
+          rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+          heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+          heapTotalMb: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        },
+        nodeVersion: process.version,
+        platform: process.platform,
+      },
+    });
+  } catch (error: any) {
+    const durationMs = Date.now() - startTime;
+    res.status(500).json({
+      status: "error",
+      statusCode: 500,
+      timestamp: new Date().toISOString(),
+      responseTime: `${durationMs}ms`,
+      responseTimeMs: durationMs,
+      error: error.message || "Erro ao verificar saúde dos serviços",
+    });
+  }
 });
 
 // ============================================================================
@@ -1555,7 +1648,7 @@ const handleMetaWebhookVerification = async (req: express.Request, res: express.
   }
 
   if (mode === "subscribe" && token && challenge) {
-    const isTokenValid = validTokens.includes(String(token)) || String(token).length > 6;
+    const isTokenValid = validTokens.includes(String(token));
     if (isTokenValid) {
       console.log(`[Webhook Meta] Handshake de verificação validado com sucesso! Token: ${token}`);
       return res.status(200).send(challenge);
@@ -2227,6 +2320,14 @@ app.post("/api/webhooks/test-dispatch", async (req, res) => {
       "User-Agent": "ManyFlow-Webhook-Dispatcher/2.5.0",
       ...(customHeaders || {})
     };
+
+    // Inject explicit Authorization headers if authType is provided
+    if (req.body.authType === "bearer" && req.body.bearerToken) {
+      headers["Authorization"] = `Bearer ${String(req.body.bearerToken).trim().replace(/^Bearer\s+/i, '')}`;
+    } else if (req.body.authType === "api_key" && req.body.apiKeyValue) {
+      const headerKey = (req.body.apiKeyHeaderName && req.body.apiKeyHeaderName.trim()) || "X-API-Key";
+      headers[headerKey] = String(req.body.apiKeyValue).trim();
+    }
 
     const startTime = Date.now();
     let responseStatus = 200;
@@ -5333,9 +5434,15 @@ app.post("/api/auth/login", async (req, res) => {
         updatedAt: new Date().toISOString()
       };
 
+      const sessionData = await createSession(fallbackUser, req);
       return res.json({
         success: true,
-        token: `mf_token_${Date.now()}_${crypto.randomBytes(8).toString("hex")}`,
+        token: sessionData.token,
+        session: {
+          id: sessionData.session.id,
+          expiresAt: sessionData.session.expiresAt,
+          expiresIn: sessionData.expiresIn,
+        },
         user: fallbackUser,
         tenant: fallbackTenant
       });
@@ -5401,7 +5508,8 @@ app.post("/api/auth/login", async (req, res) => {
       tenant = await db.collection("tenants").findOne({ id: "tenant_main" });
     }
 
-    const token = `mf_token_${Date.now()}_${crypto.randomBytes(16).toString("hex")}`;
+    // Create persistent JWT session with expiration
+    const sessionData = await createSession(user, req);
 
     // Clean user object before sending
     const userSafe = {
@@ -5420,7 +5528,12 @@ app.post("/api/auth/login", async (req, res) => {
 
     res.json({
       success: true,
-      token,
+      token: sessionData.token,
+      session: {
+        id: sessionData.session.id,
+        expiresAt: sessionData.session.expiresAt,
+        expiresIn: sessionData.expiresIn,
+      },
       user: userSafe,
       tenant: tenant || {
         id: "tenant_main",
@@ -5491,10 +5604,15 @@ app.post("/api/auth/register", async (req, res) => {
       await db.collection("users").insertOne(newUser);
     }
 
-    const token = `mf_token_${Date.now()}_${crypto.randomBytes(16).toString("hex")}`;
+    const sessionData = await createSession(newUser, req);
     res.json({
       success: true,
-      token,
+      token: sessionData.token,
+      session: {
+        id: sessionData.session.id,
+        expiresAt: sessionData.session.expiresAt,
+        expiresIn: sessionData.expiresIn,
+      },
       user: {
         id: newUser.id,
         name: newUser.name,
@@ -5512,70 +5630,133 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-// 3. GET /api/auth/me
+// 3. GET /api/auth/me - Authenticate via cryptographic JWT with expiration verification
 app.get("/api/auth/me", async (req, res) => {
   try {
     const token = req.headers.authorization?.replace("Bearer ", "") || (req.query.token as string);
 
     if (!token) {
-      return res.json({ success: false, message: "Não autenticado" });
+      return res.status(401).json({ success: false, message: "Não autenticado: token ausente" });
+    }
+
+    // Verify cryptographic JWT signature & expiration & active session in database
+    const validation = await validateSessionToken(token);
+    if (!validation.valid || !validation.user) {
+      return res.status(401).json({ 
+        success: false, 
+        message: validation.error || "Sessão inválida ou expirada",
+        code: "SESSION_EXPIRED" 
+      });
     }
 
     const db = await getDb();
+    let user: any = null;
+    let tenant: any = null;
 
-    if (!db) {
-      if (token.startsWith("token_") || token.startsWith("ey") || token === "token_session_active_manyflow") {
-        return res.json({
-          success: true,
-          user: {
-            id: "usr_admin_default",
-            name: "Administrador ManyFlow",
-            email: "admin@manyflow.com",
-            role: "super_admin",
-            tenantId: "tenant_main",
-            allowedTenants: ["tenant_main"]
-          },
-          tenant: {
-            id: "tenant_main",
-            name: "ManyFlow Principal",
-            slug: "manyflow-principal",
-            branding: { brandName: "ManyFlow", primaryColor: "#0084FF" }
-          }
-        });
+    if (db) {
+      user = await db.collection("users").findOne({ id: validation.user.userId });
+      if (user) {
+        tenant = await db.collection("tenants").findOne({ id: user.tenantId });
       }
-      return res.json({ success: false, message: "Sessão inválida" });
     }
 
-    // Lookup user by session token or id encoded in token
-    let user: any = await db.collection("users").findOne({ $or: [{ sessionToken: token }, { id: token }] });
-    if (!user && (token.startsWith("token_") || token.startsWith("ey"))) {
-      user = await db.collection("users").findOne({});
-    }
-
-    if (!user) {
-      return res.json({ success: false, message: "Usuário não encontrado" });
-    }
-
-    const tenant = (await db.collection("tenants").findOne({ id: user.tenantId })) || {
-      id: "tenant_main",
-      name: "ManyFlow Principal",
-      slug: "manyflow-principal",
-      branding: { brandName: "ManyFlow", primaryColor: "#0084FF" }
+    const userSafe = user ? {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role || validation.user.role,
+      avatarUrl: user.avatarUrl || null,
+      tenantId: user.tenantId,
+      allowedTenants: user.allowedTenants || [user.tenantId],
+      isActive: user.isActive !== false
+    } : {
+      id: validation.user.userId,
+      name: validation.user.name,
+      email: validation.user.email,
+      role: validation.user.role,
+      tenantId: validation.user.tenantId,
+      allowedTenants: validation.user.allowedTenants,
+      isActive: true
     };
 
     res.json({
       success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatarUrl: user.avatarUrl,
-        tenantId: user.tenantId,
-        allowedTenants: user.allowedTenants || [user.tenantId]
+      user: userSafe,
+      tenant: tenant || {
+        id: validation.user.tenantId || "tenant_main",
+        name: "ManyFlow Principal",
+        slug: "manyflow-principal",
+        branding: { brandName: "ManyFlow", primaryColor: "#0084FF" }
       },
-      tenant
+      session: {
+        id: validation.session?.id,
+        expiresAt: validation.session?.expiresAt,
+        lastActiveAt: validation.session?.lastActiveAt,
+        createdAt: validation.session?.createdAt,
+      }
     });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3.1. POST /api/auth/logout - Revoke active JWT session
+app.post("/api/auth/logout", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.replace("Bearer ", "") || req.body?.token;
+    if (token) {
+      const validation = await validateSessionToken(token);
+      if (validation.session?.id) {
+        await revokeSession(validation.session.id, "Logout explícito do usuário");
+      }
+    }
+    res.json({ success: true, message: "Sessão encerrada com sucesso." });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3.2. GET /api/auth/sessions - List active sessions for user
+app.get("/api/auth/sessions", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Usuário não identificado" });
+    }
+    const sessions = await listUserSessions(userId);
+    res.json({
+      success: true,
+      currentSessionId: req.session?.id,
+      sessions: sessions.map((s) => ({
+        ...s,
+        isCurrent: s.id === req.session?.id,
+      })),
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3.3. DELETE /api/auth/sessions/:sessionId - Revoke a specific session
+app.delete("/api/auth/sessions/:sessionId", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const { sessionId } = req.params;
+    const revoked = await revokeSession(sessionId, "Sessão revogada remotamente pelo usuário");
+    res.json({ success: revoked, sessionId });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3.4. POST /api/auth/revoke-all - Revoke all sessions for current user
+app.post("/api/auth/revoke-all", requireAuth, async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Usuário não identificado" });
+    }
+    const count = await revokeAllUserSessions(userId, "Encerramento global de todas as sessões");
+    res.json({ success: true, count, message: `${count} sessões ativas foram revogadas com sucesso.` });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -6195,7 +6376,10 @@ app.post("/api/auth/master-login", async (req, res) => {
       };
     }
 
-    const token = `mf_master_token_${Date.now()}_${crypto.randomBytes(16).toString("hex")}`;
+    const sessionData = await createSession({
+      ...superAdminUser,
+      tenantId: targetTenant.id
+    }, req);
 
     masterAuditLogs.unshift({
       id: `log_master_login_${Date.now()}`,
@@ -6208,7 +6392,12 @@ app.post("/api/auth/master-login", async (req, res) => {
 
     res.json({
       success: true,
-      token,
+      token: sessionData.token,
+      session: {
+        id: sessionData.session.id,
+        expiresAt: sessionData.session.expiresAt,
+        expiresIn: sessionData.expiresIn,
+      },
       user: {
         id: superAdminUser.id,
         name: superAdminUser.name || "Administrador Master",
@@ -6746,6 +6935,94 @@ app.post("/api/httpsms/webhook", async (req, res) => {
   }
 });
 
+// ============================================================================
+// --- CRON JOBS & BACKGROUND WORKERS API ENDPOINTS ---
+// ============================================================================
+
+// 1. GET /api/system/cron-status - Retrieve all background workers status & statistics
+app.get("/api/system/cron-status", (req, res) => {
+  try {
+    const status = cronManager.getStatus();
+    res.json({ success: true, ...status });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 2. POST /api/system/cron/trigger/:workerId - Manually trigger a background worker cycle
+app.post("/api/system/cron/trigger/:workerId", async (req, res) => {
+  try {
+    const { workerId } = req.params;
+    const result = await cronManager.runWorker(workerId);
+    res.json({ success: result.success, workerId, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 3. POST /api/system/cron/toggle/:workerId - Enable or pause a specific worker
+app.post("/api/system/cron/toggle/:workerId", (req, res) => {
+  try {
+    const { workerId } = req.params;
+    const { enabled } = req.body;
+    const isToggled = cronManager.toggleWorker(workerId, Boolean(enabled));
+    if (!isToggled) {
+      return res.status(404).json({ success: false, error: "Worker não encontrado" });
+    }
+    res.json({ success: true, workerId, enabled: Boolean(enabled) });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 4. POST /api/system/cron/schedule/:workerId - Update cron expression schedule dynamically
+app.post("/api/system/cron/schedule/:workerId", (req, res) => {
+  try {
+    const { workerId } = req.params;
+    const { cronExpression } = req.body;
+    if (!cronExpression) {
+      return res.status(400).json({ success: false, error: "Expressão cron é obrigatória." });
+    }
+    const result = cronManager.updateSchedule(workerId, cronExpression);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+    res.json({ success: true, workerId, cronExpression });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 5. POST /api/system/cron/clean-logs - Trigger automatic clean of old logs (> 30 days) via cronService
+app.post("/api/system/cron/clean-logs", async (req, res) => {
+  try {
+    const days = typeof req.body.days === "number" ? req.body.days : 30;
+    const result = await cronService.cleanOldLogs(days);
+    res.json({ success: result.success, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 6. POST /api/system/cron/dispatch-broadcasts - Trigger verification of broadcasts with status 'pending' via cronService
+app.post("/api/system/cron/dispatch-broadcasts", async (req, res) => {
+  try {
+    const result = await cronService.dispatchPendingBroadcasts();
+    res.json({ success: result.success, ...result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 7. GET /api/system/cron/cron-service-status - Check status of cronService tasks
+app.get("/api/system/cron/cron-service-status", (req, res) => {
+  try {
+    res.json({ success: true, ...cronService.getStatus() });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Start Server with Vite Middleware
 async function startServer() {
   try {
@@ -6763,9 +7040,26 @@ async function startServer() {
       });
     }
 
-    app.listen(PORT, "0.0.0.0", () => {
+    const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`[ManyFlow] Server running on http://0.0.0.0:${PORT}`);
+      // Boot up background cron workers and node-cron service
+      cronManager.startAll();
+      cronService.initCronJobs();
     });
+
+    // Graceful process shutdown handlers
+    const handleShutdown = (signal: string) => {
+      console.log(`[ManyFlow] Recebido sinal ${signal}. Encerrando background workers com segurança...`);
+      cronManager.stopAll();
+      cronService.stopCronJobs();
+      server.close(() => {
+        console.log("[ManyFlow] Servidor HTTP finalizado com sucesso.");
+        process.exit(0);
+      });
+    };
+
+    process.on("SIGTERM", () => handleShutdown("SIGTERM"));
+    process.on("SIGINT", () => handleShutdown("SIGINT"));
   } catch (error) {
     console.error("[ManyFlow] Error starting server:", error);
     process.exit(1);
